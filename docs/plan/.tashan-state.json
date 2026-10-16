@@ -1,0 +1,15 @@
+{
+  "version": "v1",
+  "milestone": "none",
+  "stage": "doc_qa_gate",
+  "costProfile": "standard",
+  "rounds": {},
+  "minutes": {},
+  "gates": {
+    "dod": "pass",
+    "docQa": "pass",
+    "e2e": "unknown"
+  },
+  "findings": [],
+  "updatedAt": "2026-10-16T18:56:36.278Z"
+}
