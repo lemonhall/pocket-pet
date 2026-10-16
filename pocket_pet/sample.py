@@ -33,12 +33,20 @@ class Sampler:
     rng: random.Random
 
     def natural(self) -> State:
+        """An everyday cat, not a uniformly random one.
+
+        Drives are drawn from a triangular distribution peaking at 4: a real cat
+        spends most of its time neither starving nor exhausted. Uniform 0..9 was
+        the first version, and it made the rubric's hard needs fire so often that
+        the labels collapsed onto seek_food/sleep (found while building the seed
+        set - see ECN-0002's notes and the M2 commit).
+        """
         r = self.rng
         time = r.choices(TIMES, weights=[2, 5, 2, 3])[0]
         vals: dict = {}
         for name, span in NUMERIC.items():
-            vals[name] = r.randrange(span)
-        # mild correlations: cats sleep at night and get bored and hungry over time
+            mode = {"bored": 5.0, "energy": 5.0, "clingy": 4.0, "curiosity": 4.0}.get(name, 3.5)
+            vals[name] = int(r.triangular(0, span - 1, mode))
         if time == "night":
             vals["energy"] = min(vals["energy"], 3)
             vals["bored"] = min(vals["bored"], 4)
@@ -87,6 +95,32 @@ class Sampler:
 
     def conflicting_last(self) -> State:
         s = self.natural().values; s["last"] = "sleep"; s["hunger"] = self.rng.randint(7, 9); return State(s)
+
+    def _calm(self) -> dict:
+        """A cat with no hard need: hunger 2..4, energy 5..7, litter/scruff low."""
+        s = self.natural().values
+        s["hunger"] = self.rng.randint(2, 4)
+        s["energy"] = self.rng.randint(5, 7)
+        s["litter"] = self.rng.randint(0, 3)
+        s["scruff"] = self.rng.randint(0, 3)
+        return s
+
+    def timid_with_owner(self) -> State:
+        s = self._calm()
+        s["bold"] = self.rng.randint(0, 2)
+        s["owner"] = f"{self.rng.choice(('near', 'mid'))} {self.rng.randint(1, 12)}"
+        return State(s)
+
+    def clingy_with_owner(self) -> State:
+        s = self._calm()
+        s["clingy"] = self.rng.randint(7, 9)
+        s["owner"] = f"{self.rng.choice(('near', 'mid'))} {self.rng.randint(1, 12)}"
+        return State(s)
+
+    def scruffy(self) -> State:
+        s = self._calm()
+        s["scruff"] = self.rng.randint(6, 9)
+        return State(s)
 
 
 def generate(n: int, seed: int, out: Path) -> int:

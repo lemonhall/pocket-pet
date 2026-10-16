@@ -23,6 +23,13 @@ FAMILIES = {
     "food_at_paw":     (lambda s: str(s["food"]).startswith("near"), "food within near"),
     "toy_diagonal":    (lambda s: str(s["toy"]).startswith("far"), "toy far away"),
     "conflicting_last": (lambda s: s["last"] == "sleep" and s["hunger"] >= 7, "just slept and now starving"),
+    # the two rare decision regions: without situations aimed at them, `hide` and
+    # `follow_owner` almost never appear in a labelled set (the hard needs win)
+    "timid_with_owner": (lambda s: s["bold"] <= 2 and str(s["owner"]).split()[0] in ("near", "mid"),
+                         "bold <= 2 and the owner is near"),
+    "clingy_with_owner": (lambda s: s["clingy"] >= 7 and str(s["owner"]).split()[0] in ("near", "mid"),
+                          "clingy >= 7 and the owner is near"),
+    "scruffy": (lambda s: s["scruff"] >= 6, "scruff >= 6 (needs grooming)"),
 }
 
 
