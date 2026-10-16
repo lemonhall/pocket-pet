@@ -1,0 +1,9 @@
+{
+ "requests": 2000,
+ "cny": 8.3757,
+ "in_hit": 3065856,
+ "in_miss": 3321110,
+ "out": 1248313,
+ "last_peak": false,
+ "last_bad": 50
+}

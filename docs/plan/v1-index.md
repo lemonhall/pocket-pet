@@ -51,16 +51,27 @@
 
 ## Tashan Trigger Audit
 
-- expected_review_triggers：本轮 2 次（`v_doc_writing_done` 前、每个里程碑完成时）
-- actual_review_runs：0（文档写作中）
-- skipped_triggers：0
-- skip_reasons：—
-- mitigation：文档阶段结束前用 `tashan_loop stage` 记门禁结果
+- expected_review_triggers：本轮 4 次（`v_doc_writing_done` 前、M2/M3/M4 各一次）
+- actual_review_runs：3（M1/M2 合并一次、M3 一次、M4 一次）
+- skipped_triggers：1
+- skip_reasons：M6（房间世界/模拟器）与 M3 并行推进，未单独开 review 轮；
+  其验收（8/8 目标、驱动值有界、E2E）已在 M4 轮一并复核
+- mitigation：M6 的验收证据写进 `v1-report.md` 的里程碑表，并留 `sim --report` 的可复跑命令
 
 ## 差异列表（愿景 vs. 现实）
 
-（本轮尚未开始执行；每完成一个里程碑后回填）
+见 [`v1-report.md`](v1-report.md) 的"差异清单"一节。三条要点：
+
+1. **M5（Q4 导出 + 上板）是真实断链** —— 只能说架构已对齐（14.2M / 词表 53 / seq 64），
+   不能说"能在板上跑"；进 v2。
+2. **VISION 的定向场景断言未做**（给食物 30 秒内 seek_food 等），目前只有统计口径覆盖；
+   进 v1.1，需要给 sim 加 `--scenario`。
+3. **"性格是参数"未验证** —— rubric 的阈值参数化 + 重训两份权重做对比，进 v2。
 
 ## Review 记录
 
-（每轮追加，格式见 SKILL；写入 `docs/plan/tashan-review-log.md`）
+- 本轮 3 次 review（对应 M2 / M3 / M4），无 open BLOCKER、无 open MAJOR。
+- 记下的两条 MINOR 已处置：① 背面/低头姿势的重点色偏重（v1.1 精修美术）；
+  ② 训练集子采样是**性能妥协**（CPU 每 epoch 80 分钟），已在报告里写明，
+  若要全量训练需要 CUDA 版 torch（本机装到的是 CPU 版）。
+

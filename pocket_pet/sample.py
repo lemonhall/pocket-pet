@@ -19,7 +19,8 @@ from pathlib import Path
 from . import families
 from .state import BUCKETS, FIELD_NAMES, GOALS, META, NUMERIC, STAGES, TIMES, WHERE, State
 
-NATURAL_SHARE = 0.65
+NATURAL_SHARE = 0.55        # the rest is family-driven: with 15 families, 0.35 left
+                            # some of them right at the 100-row boundary
 
 
 def _where(rng: random.Random) -> str:
