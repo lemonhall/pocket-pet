@@ -15,7 +15,7 @@
 | M3 | API 标注器 + 5 万条 | REQ-005/006 | 100 条 ≤¥0.10 且校验率 ≥99%；全量实测 ≤¥40；三集无泄漏；评测集 ≥500 条 source=hand | `uv run python -m pocket_pet.label --limit 100`；`uv run python -m pocket_pet.check_dataset --leak` | todo |
 | M4 | 训练学生 + 评测 | REQ-007 | 同 seed 可复现（±1%）；留出集一致率 ≥60% 且附混淆矩阵 | `uv run python -m pocket_pet.train --config configs/v1.yaml`；`uv run python -m pocket_pet.eval` | todo |
 | M5 | 量化 + 上板 | REQ-008 | 权重 ≤8 MB；真机 `q4_model_dot_check` 全一致；≥8 tok/s | 设备日志（`tools/tab5_boot_log.py`） | todo |
-| M6 | 猫的反射层 + E2E | REQ-009/010 | `--no-advisor` 5 分钟无卡死且覆盖 ≥8 状态；`pytest tests/e2e/ -q` 全绿 | 见计划文件 | todo |
+| M6 | 猫的反射层 + E2E | REQ-009/010 | `--no-advisor` 5 分钟无卡死、≥4 目标、驱动值 0..9；`--advisor` 覆盖 ≥8 目标；`pytest tests/e2e/ -q` 全绿 | 见计划文件 | 反射层+渲染+GIF 已完成，E2E 测试待写 |
 
 ## 计划索引
 
@@ -45,7 +45,9 @@
 
 ## ECN 索引
 
-（暂无）
+- **ECN-0001**（2026-10-17）：REQ-0001-009 的"≥8 状态覆盖"错配给反射层；
+  改为"反射层证明活着（≥4 目标 + 驱动值 0..9），顾问层证明有脑子（≥8 目标 + 分布变化 ≥50%）"。
+  见 [`../ecn/ECN-0001-reflex-vs-policy-coverage.md`](../ecn/ECN-0001-reflex-vs-policy-coverage.md)。
 
 ## Tashan Trigger Audit
 
