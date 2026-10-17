@@ -52,6 +52,9 @@ typedef struct {
     int spot;                   /* increments on every arrival: pick a new random
                                  * wander target only then, never per frame (a
                                  * per-frame target made the cat jitter left-right) */
+    /* A tap is a summons: for a while the model may not overrule the goal you
+     * pointed at, so clicking the tree really does bring the cat over to it. */
+    int summon_frames;
     /* what just happened, for the status line */
     char notice[48];
 } cat_state_t;
@@ -67,6 +70,9 @@ void  cat_pet(cat_state_t *c);
 void  cat_clean_box(cat_state_t *c);
 /* The state line the model reads, exactly 17 fields. */
 void  cat_state_line(const cat_state_t *c, char *out, int n);
+/* Summons: the goal you tapped wins for ~30 s (repeatable by tapping again). */
+void  cat_world_summon(cat_state_t *c, const char *goal);
+bool  cat_world_summoned(const cat_state_t *c);
 /* Where the cat should walk for its current goal (room pixels). */
 void  cat_goal_target(const cat_state_t *c, float *tx, float *ty);
 int   cat_goal_index(const char *name);

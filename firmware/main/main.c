@@ -134,8 +134,12 @@ static void brain_task(void *arg) {
             /* The reflex layer may not veto the model, only pre-empt it briefly:
              * a permanent veto meant a cat stuck at an empty bowl ignored every
              * "go eat" the brain ever produced (seen on the device 2026-10-17). */
-            if (s_cat.drives[CAT_THIRST] < 6.0f || s_cat.snooze_frames > 0)
+            /* a summons outranks the model: you pointed at the tree, it goes there */
+            if (cat_world_summoned(&s_cat)) {
+                ESP_LOGI(TAG, "summons holds: %s (%d frames left)", s_cat.goal, s_cat.summon_frames);
+            } else if (s_cat.drives[CAT_THIRST] < 6.0f || s_cat.snooze_frames > 0) {
                 cat_world_set_goal(&s_cat, g);
+            }
         } else {
             ESP_LOGW(TAG, "the brain did not answer (%d ms)", ms);
         }
@@ -318,18 +322,22 @@ static const char *handle_tap(int rx, int ry) {
         (float)(ly - (int)(s_cat.y * 4)) * (ly - (int)(s_cat.y * 4)) < bd) {
         cat_pet(&s_cat); say(SND_FEED); say(SND_BUBBLES_LOOP); hit = "pet";
     } else if (fabsf((float)lx - 216) < 90 && fabsf((float)ly - 512) < 90) {
-        cat_feed(&s_cat); say(SND_FEED); hit = "food";
+        cat_feed(&s_cat); say(SND_FEED); cat_world_summon(&s_cat, "seek_food"); hit = "food";
     } else if (fabsf((float)lx - 416) < 90 && fabsf((float)ly - 608) < 90) {
-        cat_water(&s_cat); say(SND_TAP); hit = "water";
+        cat_water(&s_cat); say(SND_TAP); cat_world_summon(&s_cat, "drink"); hit = "water";
     } else if (fabsf((float)lx - 784) < 90 && fabsf((float)ly - 248) < 90) {
-        cat_play_with(&s_cat); say(SND_TAP); hit = "play";
+        cat_play_with(&s_cat); say(SND_TAP); cat_world_summon(&s_cat, "play"); hit = "play";
     } else if (fabsf((float)lx - 1144) < 90 && fabsf((float)ly - 584) < 90) {
         cat_clean_box(&s_cat); say(SND_SPOOK); hit = "clean";
     } else if (fabsf((float)lx - 1000) < 90 && fabsf((float)ly - 240) < 90) {
         s_cat.drives[CAT_BORED] = 9;
         snprintf(s_cat.notice, sizeof s_cat.notice, "scratching the tree");
         say(SND_TAP);
+        cat_world_summon(&s_cat, "scratch");        /* the tree: it comes and plays */
         hit = "tree";
+    } else if (fabsf((float)lx - 344) < 90 && fabsf((float)ly - 176) < 90) {
+        cat_world_summon(&s_cat, "sleep");          /* the cushion by the window */
+        hit = "bed";
     }
     ESP_LOGI(TAG, "tap raw (%d,%d) -> screen (%d,%d) = %s | %s", rx, ry, lx, ly, hit, s_cat.notice);
     return hit;

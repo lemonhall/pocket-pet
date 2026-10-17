@@ -103,6 +103,15 @@ void cat_world_set_goal(cat_state_t *c, const char *goal) {
     c->asleep = !strcmp(goal, "sleep");
 }
 
+void cat_world_summon(cat_state_t *c, const char *goal) {
+    if (!goal) return;
+    cat_world_set_goal(c, goal);
+    c->summon_frames = 600;             /* ~30 s at 20 fps; tapping again refreshes */
+    snprintf(c->notice, sizeof c->notice, "coming: %s", goal);
+}
+
+bool cat_world_summoned(const cat_state_t *c) { return c->summon_frames > 0; }
+
 static void arrive(cat_state_t *c) {
     float *d = c->drives;
     if (!strcmp(c->goal, "seek_food")) {
@@ -153,21 +162,25 @@ void cat_world_tick(cat_state_t *c, float dt) {
     c->frame++;
     if (c->purr_frames > 0) c->purr_frames--;
     if (c->toy_wiggle > 0) c->toy_wiggle--;
+    if (c->summon_frames > 0) c->summon_frames--;
     if (c->purr_frames > 0) {
         /* being stroked: it stops and stays put (the display faces it at the camera) */
         c->moving = false;
         c->drives[CAT_CLINGY] = clamp9(c->drives[CAT_CLINGY] + 0.05f * dt);
         return;
     }
-    /* the world moves on (rates are per second; a sim minute is a cat-hour) */
-    d[CAT_HUNGER] = clamp9(d[CAT_HUNGER] + 0.10f * dt);
-    d[CAT_BORED]  = clamp9(d[CAT_BORED] + (c->asleep ? 0.04f : 0.22f) * dt);
-    if (c->asleep) d[CAT_ENERGY] = clamp9(d[CAT_ENERGY] + 0.55f * dt);
-    else           d[CAT_ENERGY] = clamp9(d[CAT_ENERGY] - 0.14f * dt);
-    d[CAT_LITTER]  = clamp9(d[CAT_LITTER] + 0.05f * dt);
-    d[CAT_SCRUFF]  = clamp9(d[CAT_SCRUFF] + 0.06f * dt);
-    d[CAT_CLINGY]  = clamp9(d[CAT_CLINGY] + 0.09f * dt);
-    d[CAT_THIRST]  = clamp9(d[CAT_THIRST] + 0.12f * dt);
+    /* the world moves on. These are ~10x slower than the Python sim's rates: that
+     * sim ran at "a sim minute is a cat hour" so behaviour showed up in a 5-minute
+     * run, but watched live on the device the cat was hungry again every 30
+     * seconds (the user: "它是不是一直还是饿啊"). A meal now comes every ~10 min. */
+    d[CAT_HUNGER] = clamp9(d[CAT_HUNGER] + 0.010f * dt);
+    d[CAT_BORED]  = clamp9(d[CAT_BORED] + (c->asleep ? 0.004f : 0.022f) * dt);
+    if (c->asleep) d[CAT_ENERGY] = clamp9(d[CAT_ENERGY] + 0.055f * dt);
+    else           d[CAT_ENERGY] = clamp9(d[CAT_ENERGY] - 0.014f * dt);
+    d[CAT_LITTER]  = clamp9(d[CAT_LITTER] + 0.005f * dt);
+    d[CAT_SCRUFF]  = clamp9(d[CAT_SCRUFF] + 0.006f * dt);
+    d[CAT_CLINGY]  = clamp9(d[CAT_CLINGY] + 0.009f * dt);
+    d[CAT_THIRST]  = clamp9(d[CAT_THIRST] + 0.012f * dt);
     if (!c->box_clean) d[CAT_LITTER] = clamp9(d[CAT_LITTER] + 0.10f * dt);
 
     /* the reflex layer: thirst outranks whatever the model wanted - unless the
