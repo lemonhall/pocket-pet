@@ -87,8 +87,13 @@ static void restore_rect(uint16_t *fb, int x0, int y0, int w, int h) {
     }
 }
 
-/* Rotate one rectangle of the view into the portrait DSI buffer and push it.
- * s_flip only changes which way round the turn goes. */
+/* Rotate one rectangle of the view into BOTH portrait DSI buffers.
+ *
+ * One buffer is not enough: the DPI engine scans it continuously, so writing a
+ * rectangle while it is being scanned tears the picture - the big status panel made
+ * that obvious ("疯狂屏闪"). Both buffers are kept identical and each frame presents
+ * the one the engine is not reading, which costs a second pass over the dirty rects
+ * only (a few thousand pixels normally). */
 static void rotate_rect(const uint16_t *fb, int vx0, int vy0, int w, int h) {
     if (vx0 < 0) { w += vx0; vx0 = 0; }
     if (vy0 < 0) { h += vy0; vy0 = 0; }
@@ -100,12 +105,12 @@ static void rotate_rect(const uint16_t *fb, int vx0, int vy0, int w, int h) {
         for (int vx = vx0; vx < vx0 + w; vx++) {
             int dx = s_flip ? (DSI_W - 1 - vy) : vy;
             int dy = s_flip ? vx : (VIEW_W - 1 - vx);
-            s_ppa_out[(size_t)dy * DSI_W + dx] = src[vx];
+            size_t o = (size_t)dy * DSI_W + dx;
+            uint16_t v = src[vx];
+            s_fb[0][o] = v;
+            s_fb[1][o] = v;
         }
     }
-    /* NO draw_bitmap here: presenting is once per frame. Doing it inside this
-     * function meant 5-10 presents per frame (one per dirty rect), so the glass
-     * showed half-updated states and the cat strobed (user: "猫一闪一闪的"). */
 }
 
 static void build_room(void) {
@@ -310,8 +315,9 @@ void display_cat_frame(const cat_state_t *c) {
     for (int i = 0; i < s_cur_n; i++)
         for (int k = 0; k < 4; k++) s_prev[i][k] = s_cur[i][k];
 
-    /* 6. present ONCE per frame, after every rectangle has been written */
-    esp_lcd_panel_draw_bitmap(s_panel, 0, 0, DSI_W, DSI_H, s_ppa_out);
+    /* 6. present ONCE per frame, from the buffer the engine is not scanning */
+    s_fb_idx ^= 1;
+    esp_lcd_panel_draw_bitmap(s_panel, 0, 0, DSI_W, DSI_H, s_fb[s_fb_idx]);
 
     s_frames++;
     int64_t now = esp_timer_get_time();
