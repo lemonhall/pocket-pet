@@ -9,4 +9,7 @@ bool display_cat_init(void);
 void display_cat_frame(const cat_state_t *c);
 /* Backlight 0..100. */
 void display_cat_brightness(int pct);
+/* Draw a short-lived marker where a tap landed (landscape view coordinates).
+ * It makes the touch mapping checkable by eye: the dot must sit under your finger. */
+void display_cat_mark(int vx, int vy);
 int  display_cat_fps(void);

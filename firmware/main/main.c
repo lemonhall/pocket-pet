@@ -286,6 +286,7 @@ static void touch_task(void *arg) {
             int lx = 720 - 1 - (int)raw_y[0];
             int ly = (int)raw_x[0];
             const char *hit = "nothing";
+            display_cat_mark(lx, ly);          /* so the hit point is visible under your finger */
             float bd = 90.0f * 90.0f;                 /* a finger is fat: 90 px radius */
             if ((float)(lx - (int)(s_cat.x * 4)) * (lx - (int)(s_cat.x * 4)) +
                 (float)(ly - (int)(s_cat.y * 4)) * (ly - (int)(s_cat.y * 4)) < bd) {

@@ -14,6 +14,7 @@
 #include "display_cat.h"
 
 #include <string.h>
+#include <stdlib.h>
 
 #include "esp_heap_caps.h"
 #include "esp_log.h"
@@ -52,6 +53,7 @@ static bool s_ppa_busy;
 static int s_fps, s_frames;
 static int64_t s_fps_t0;
 static int s_last_cx = -1000, s_last_cy = -1000;
+static int s_prev_mark_x = -1, s_prev_mark_y = -1;
 
 static inline void put(uint16_t *fb, int x, int y, uint16_t v) {
     if (x < 0 || y < 0 || x >= VIEW_W || y >= VIEW_H) return;
@@ -174,6 +176,25 @@ bool display_cat_init(void) {
 
 void display_cat_brightness(int pct) { bsp_display_brightness_set(pct); }
 
+/* a tap marker: a white cross that lives for ~25 frames, then the room comes back */
+static int s_mark_x = -1, s_mark_y = -1, s_mark_life;
+#define MARK_R 24
+
+void display_cat_mark(int vx, int vy) {
+    s_mark_x = vx; s_mark_y = vy; s_mark_life = 25;
+}
+
+static void draw_mark(uint16_t *fb) {
+    if (s_mark_life <= 0 || s_mark_x < 0) return;
+    for (int j = -MARK_R; j <= MARK_R; j++)
+        for (int i = -MARK_R; i <= MARK_R; i++) {
+            if (i * i + j * j > MARK_R * MARK_R) continue;
+            if (abs(i) > 3 && abs(j) > 3) continue;      /* a cross, not a blob */
+            put(fb, s_mark_x + i, s_mark_y + j, 0xFFFF);
+        }
+    s_mark_life--;
+}
+
 void display_cat_frame(const cat_state_t *c) {
     if (!s_panel || !s_view || !s_room) return;
 
@@ -200,6 +221,8 @@ void display_cat_frame(const cat_state_t *c) {
     int cx = (int)(c->x * 4.0f) - FRAME / 2;      /* 320x180 grid -> 1280x720 */
     int cy = (int)(c->y * 4.0f) - FRAME / 2;
     if (s_last_cx > -999) restore_rect(fb, s_last_cx, s_last_cy, FRAME, FRAME);
+    if (s_prev_mark_x >= 0)
+        restore_rect(fb, s_prev_mark_x - MARK_R, s_prev_mark_y - MARK_R, 2 * MARK_R + 1, 2 * MARK_R + 1);
     const uint16_t *sheet = (const uint16_t *)sprites_bin_start;
     int stride = CAT_SHEET_COLS * FRAME;
     int painted = blit_sprite(fb, sheet + (row * FRAME) * stride + col * FRAME, cx, cy, 0x0000);
@@ -216,8 +239,13 @@ void display_cat_frame(const cat_state_t *c) {
      * later is to rotate only the cat's dirty rectangle, since the DSI buffer
      * persists between frames. */
     /* only the pixels that changed go across: where the cat was, where it is */
+    draw_mark(fb);                        /* a tap marker, if one is alive */
     if (s_last_cx > -999) rotate_rect(fb, s_last_cx, s_last_cy, FRAME, FRAME);
     rotate_rect(fb, cx, cy, FRAME, FRAME);
+    if (s_mark_life > 0 && s_mark_x >= 0)
+        rotate_rect(fb, s_mark_x - MARK_R, s_mark_y - MARK_R, 2 * MARK_R + 1, 2 * MARK_R + 1);
+    s_prev_mark_x = (s_mark_life > 0) ? s_mark_x : -1;
+    s_prev_mark_y = (s_mark_life > 0) ? s_mark_y : -1;
     s_last_cx = cx; s_last_cy = cy;
     esp_lcd_panel_draw_bitmap(s_panel, 0, 0, DSI_W, DSI_H, s_ppa_out);
 
