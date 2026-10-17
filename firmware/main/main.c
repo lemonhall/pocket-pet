@@ -32,6 +32,8 @@
 
 #include "q4_model.h"
 #include "word_tok.h"
+#include "audio_port.h"
+#include "audio.h"
 #include "bsp/touch.h"
 #include "driver/i2c_master.h"
 #include "nvs.h"
@@ -74,6 +76,8 @@ static void save_state(void);
 static int cmd_flip(int argc, char **argv);
 static int cmd_help(int argc, char **argv);
 static int cmd_tap(int argc, char **argv);
+static int cmd_meow(int argc, char **argv);
+static int cmd_vol(int argc, char **argv);
 
 static void load_brain(void) {
     const esp_partition_t *mp = esp_partition_find_first(ESP_PARTITION_TYPE_DATA, 0x40, NULL);
@@ -136,6 +140,22 @@ static void brain_task(void *arg) {
         }
         const char *t = rtc_tod();
         if (t) s_cat.tod = t;
+        /* The cat's own voice, on its own schedule: roughly one meow every couple
+         * of minutes (3% per 4 s tick), and the kind of meow follows how it feels.
+         * Touching it always answers immediately - see handle_tap(). */
+        s_rng = s_rng * 1664525u + 1013904223u;
+        if (s_cat.purr_frames > 0) {
+            /* being stroked: the purr loop is already running */
+        } else {
+            audio_port_stop(SND_BUBBLES_LOOP);   /* its own purr has ended */
+            if ((s_rng >> 16) % 100 < 3) {
+                int cue = SND_EAT;
+                if (s_cat.drives[CAT_HUNGER] >= 6) cue = SND_FEED;
+                else if (s_cat.drives[CAT_BORED] >= 7) cue = SND_TAP;
+                say(cue);
+                ESP_LOGI(TAG, "meow (own): cue %d", cue);
+            }
+        }
         if ((s_decisions % 3) == 0) save_state();
         ESP_LOGI(TAG, "cat: hunger %d energy %d bored %d litter %d thirst %d | goal %s | time %s | %d fps",
                  (int)s_cat.drives[CAT_HUNGER], (int)s_cat.drives[CAT_ENERGY],
@@ -257,6 +277,8 @@ static void start_console(void) {
         { .command = "clean",    .help = "clean the litter box",            .func = clean },
         { .command = "status",   .help = "every drive + the current goal",  .func = cmd_status },
         { .command = "cat",      .help = "ask the brain a state line",      .func = cmd_cat },
+        { .command = "meow",     .help = "meow [long|tap|spook|purr]",      .func = cmd_meow },
+        { .command = "vol",      .help = "vol [0|1|2]",                     .func = cmd_vol },
         { .command = "bench",    .help = "bench [n] -> tokens/s",           .func = cmd_bench },
         { .command = "dotcheck", .help = "PIE vs scalar dot self-check",    .func = cmd_dotcheck },
         { .command = "info",     .help = "model, decisions, fps, memory",   .func = cmd_info },
@@ -271,6 +293,11 @@ static void start_console(void) {
 
 /* One tap, from any source: the touch chip, or the `tap` console command. The
  * mapping must exist in exactly one place so both paths agree. */
+/* one place for "the cat says something", so every path uses the same cues.
+ * The cue names are pocket-tank's (SND_TAP, SND_FEED, ...): its audio.c carries
+ * the cue table, so the cat just fills those slots with cat sounds. */
+static void say(int cue) { audio_port_play(cue, AUDIO_PITCH_ONE); }
+
 static const char *handle_tap(int rx, int ry) {
     int lx, ly;
     if (display_cat_flipped()) {
@@ -285,14 +312,19 @@ static const char *handle_tap(int rx, int ry) {
     float bd = 90.0f * 90.0f;
     if ((float)(lx - (int)(s_cat.x * 4)) * (lx - (int)(s_cat.x * 4)) +
         (float)(ly - (int)(s_cat.y * 4)) * (ly - (int)(s_cat.y * 4)) < bd) {
-        cat_pet(&s_cat); hit = "pet";
-    } else if (fabsf((float)lx - 216) < 90 && fabsf((float)ly - 512) < 90) { cat_feed(&s_cat); hit = "food"; }
-    else if (fabsf((float)lx - 416) < 90 && fabsf((float)ly - 608) < 90) { cat_water(&s_cat); hit = "water"; }
-    else if (fabsf((float)lx - 784) < 90 && fabsf((float)ly - 248) < 90) { cat_play_with(&s_cat); hit = "play"; }
-    else if (fabsf((float)lx - 1144) < 90 && fabsf((float)ly - 584) < 90) { cat_clean_box(&s_cat); hit = "clean"; }
-    else if (fabsf((float)lx - 1000) < 90 && fabsf((float)ly - 240) < 90) {
+        cat_pet(&s_cat); say(SND_BUBBLES_LOOP); hit = "pet";
+    } else if (fabsf((float)lx - 216) < 90 && fabsf((float)ly - 512) < 90) {
+        cat_feed(&s_cat); say(SND_FEED); hit = "food";
+    } else if (fabsf((float)lx - 416) < 90 && fabsf((float)ly - 608) < 90) {
+        cat_water(&s_cat); say(SND_TAP); hit = "water";
+    } else if (fabsf((float)lx - 784) < 90 && fabsf((float)ly - 248) < 90) {
+        cat_play_with(&s_cat); say(SND_TAP); hit = "play";
+    } else if (fabsf((float)lx - 1144) < 90 && fabsf((float)ly - 584) < 90) {
+        cat_clean_box(&s_cat); say(SND_SPOOK); hit = "clean";
+    } else if (fabsf((float)lx - 1000) < 90 && fabsf((float)ly - 240) < 90) {
         s_cat.drives[CAT_BORED] = 9;
         snprintf(s_cat.notice, sizeof s_cat.notice, "scratching the tree");
+        say(SND_TAP);
         hit = "tree";
     }
     ESP_LOGI(TAG, "tap raw (%d,%d) -> screen (%d,%d) = %s | %s", rx, ry, lx, ly, hit, s_cat.notice);
@@ -319,10 +351,19 @@ static void touch_task(void *arg) {
     }
     ESP_LOGI(TAG, "touch ready: tap the bowl, the toy, the cat, the box");
     uint16_t raw_x[1], raw_y[1];
+    bool was_down = false;              /* one action per touch, not one per poll:
+                                         * while a finger rests on the glass the chip
+                                         * keeps reporting it, so every poll used to
+                                         * re-trigger pet() and the purr heart never
+                                         * expired (user: "点出来就没擦掉") */
     while (1) {
         esp_lcd_touch_read_data(tp);
         uint8_t n = 0;
-        if (esp_lcd_touch_get_coordinates(tp, raw_x, raw_y, NULL, &n, 1) && n > 0) {
+        bool down = esp_lcd_touch_get_coordinates(tp, raw_x, raw_y, NULL, &n, 1) && n > 0;
+        if (!down) { was_down = false; vTaskDelay(pdMS_TO_TICKS(30)); continue; }
+        if (was_down) { vTaskDelay(pdMS_TO_TICKS(30)); continue; }
+        was_down = true;
+        {
             /* The chip reports in the glass's native portrait frame (the driver logs
              * Max.X 720, Max.Y 1280), i.e. in the same coordinates as the DSI buffer.
              * display_cat.c turns the view with  view(vx,vy) -> DSI(vy, 1279-vx),
@@ -463,6 +504,28 @@ static int cmd_help(int argc, char **argv) {
     return 0;
 }
 
+/* "is the audio path alive at all?" - one command, so the answer is never again
+ * "I never triggered a sound" (which is exactly what happened: the cues were only
+ * wired to touch taps) */
+static int cmd_meow(int argc, char **argv) {
+    int cue = SND_FEED;
+    if (argc > 1) {
+        if (!strcmp(argv[1], "long")) cue = SND_EAT;
+        else if (!strcmp(argv[1], "tap")) cue = SND_TAP;
+        else if (!strcmp(argv[1], "spook")) cue = SND_SPOOK;
+        else if (!strcmp(argv[1], "purr")) cue = SND_BUBBLES_LOOP;
+    }
+    say(cue);
+    printf("meow: cue %d at volume %d\n", cue, audio_port_volume());
+    return 0;
+}
+
+static int cmd_vol(int argc, char **argv) {
+    if (argc > 1) audio_port_set_volume(atoi(argv[1]));
+    printf("volume %d (0 off, 1 quiet, 2 normal)\n", audio_port_volume());
+    return 0;
+}
+
 void app_main(void) {
     esp_err_t e = nvs_flash_init();
     if (e == ESP_ERR_NVS_NO_FREE_PAGES || e == ESP_ERR_NVS_NEW_VERSION_FOUND) {
@@ -478,6 +541,10 @@ void app_main(void) {
     rtc_init();
     load_state();
     load_brain();
+    /* the audio port took a whole night to get right (I2S preload, ES8388 as a
+     * slave, the amp on the IO expander): reuse it rather than re-derive it */
+    if (audio_port_init(bsp_i2c_get_handle())) audio_port_set_volume(2);
+    else ESP_LOGW(TAG, "no audio: the cat stays silent");
     if (display_cat_init()) {
         xTaskCreatePinnedToCore(render_task, "render", 8192, NULL, 4, NULL, 1);
         xTaskCreatePinnedToCore(touch_task, "touch", 6144, NULL, 3, NULL, 0);

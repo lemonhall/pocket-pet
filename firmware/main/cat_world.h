@@ -49,6 +49,9 @@ typedef struct {
      * a changed number (the user's complaint, 2026-10-17) */
     int purr_frames;            /* >0: stop, face the camera, show a heart */
     int toy_wiggle;             /* >0: the toy is being waved */
+    int spot;                   /* increments on every arrival: pick a new random
+                                 * wander target only then, never per frame (a
+                                 * per-frame target made the cat jitter left-right) */
     /* what just happened, for the status line */
     char notice[48];
 } cat_state_t;

@@ -88,9 +88,12 @@ void cat_goal_target(const cat_state_t *c, float *tx, float *ty) {
     else if (!strcmp(c->goal, "sleep"))        name = "bed";
     else if (!strcmp(c->goal, "follow_owner")) name = "owner";
     if (name) { const anchor_t *a = anchor(name); *tx = a->x; *ty = a->y; return; }
-    /* explore / hide: drift somewhere in the room, deterministically per frame */
-    *tx = 30.0f + (float)((c->frame / 37) % 26) * 10.0f;
-    *ty = 50.0f + (float)((c->frame / 53) % 12) * 10.0f;
+    /* explore / hide: one random spot per arrival (c->spot), not per frame */
+    unsigned seed = (unsigned)(c->spot * 1664525u + 1013904223u);
+    float fx = (float)((seed >> 8) % 280) / 280.0f;
+    float fy = (float)((seed >> 20) % 120) / 120.0f;
+    *tx = 20.0f + fx * (320.0f - 40.0f);
+    *ty = 48.0f + fy * (180.0f - 60.0f);
 }
 
 void cat_world_set_goal(cat_state_t *c, const char *goal) {
@@ -103,14 +106,15 @@ void cat_world_set_goal(cat_state_t *c, const char *goal) {
 static void arrive(cat_state_t *c) {
     float *d = c->drives;
     if (!strcmp(c->goal, "seek_food")) {
-        if (c->food_left > 0) {
-            c->food_left -= 1;
-            d[CAT_HUNGER] = clamp9(d[CAT_HUNGER] - 4);
-            d[CAT_ENERGY] = clamp9(d[CAT_ENERGY] + 1);
-            snprintf(c->notice, sizeof c->notice, "eating (%d left)", (int)c->food_left);
-        } else {
-            snprintf(c->notice, sizeof c->notice, "the bowl is empty");
-        }
+        /* standing at the bowl always eats. Keying this on food_left was the same
+         * mistake as the water bowl: an empty bowl made hunger unsatisfiable, so
+         * the model kept answering seek_food and the cat sat there for ever
+         * (the user noticed: "这只猫在搞咩啊…就呆在食盆那里"). `food` still refills. */
+        d[CAT_HUNGER] = clamp9(d[CAT_HUNGER] - 4);
+        d[CAT_ENERGY] = clamp9(d[CAT_ENERGY] + 1);
+        if (c->food_left > 0) c->food_left -= 1;
+        c->asleep = false;
+        snprintf(c->notice, sizeof c->notice, "eating (%d left in the bowl)", (int)c->food_left);
     } else if (!strcmp(c->goal, "drink")) {
         /* standing at the bowl always quenches: keying this on water_left made the
          * thirst drive unsatisfiable whenever the saved state said the bowl was
@@ -141,6 +145,7 @@ static void arrive(cat_state_t *c) {
         snprintf(c->notice, sizeof c->notice, "wandering");
     }
     c->last = c->goal;
+    c->spot++;                     /* a new wander spot, once per arrival */
 }
 
 void cat_world_tick(cat_state_t *c, float dt) {
