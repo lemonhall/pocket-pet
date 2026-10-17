@@ -215,24 +215,23 @@ bool display_cat_panel_open(void) { return s_show_panel; }
 /* The panel: one row per drive, with its pre-rendered Chinese label and a bar.
  * Numbers would need a font; bars carry the same information. */
 static void draw_panel(uint16_t *fb, const cat_state_t *c) {
-    const int x0 = 330, y0 = 140, w = 620, h = 440;
+    const int x0 = 300, y0 = 60, w = 680, h = 600;
     fill(fb, x0, y0, w, h, 0x18E3);
     fill(fb, x0, y0, w, 4, 0x5AEB);
     fill(fb, x0, y0 + h - 4, w, 4, 0x5AEB);
     const uint16_t *lb = (const uint16_t *)labels_bin_start;
-    /* the goal, at the top, boxed */
     int gi = c->goal_idx >= 0 ? c->goal_idx : CAT_LABEL_DRINK;
-    blit_label(fb, lb + cat_label_off[gi], cat_label_w[gi], x0 + 24, y0 + 20);
+    blit_label(fb, lb + cat_label_off[gi], cat_label_w[gi], x0 + 28, y0 + 18);
     for (int i = 0; i < CAT_DRIVES; i++) {
-        int y = y0 + 70 + i * 38;
-        int idx = 9 + i;                       /* the 9 drive labels follow the goals */
-        if (idx < CAT_LABEL_COUNT) blit_label(fb, lb + cat_label_off[idx], cat_label_w[idx], x0 + 24, y);
-        int bx = x0 + 210;
-        fill(fb, bx, y + 4, 340, 18, 0x2945);
+        int y = y0 + 78 + i * 54;
+        int idx = 9 + i;
+        if (idx < CAT_LABEL_COUNT) blit_label(fb, lb + cat_label_off[idx], cat_label_w[idx], x0 + 28, y);
+        int bx = x0 + 260;
+        fill(fb, bx, y + 8, 360, 26, 0x2945);
         float v = c->drives[i] / 9.0f;
         if (v < 0) v = 0;
         if (v > 1) v = 1;
-        fill(fb, bx, y + 4, (int)(340 * v), 18, 0x7FF0);
+        fill(fb, bx, y + 8, (int)(360 * v), 26, 0x7FF0);
     }
     add_rect(x0, y0, w, h);
 }

@@ -4,7 +4,7 @@
 #define CAT_ROOM_H 360
 #define CAT_FRAME 128
 #define CAT_SHEET_COLS 4
-#define CAT_LABEL_H 22
+#define CAT_LABEL_H 44
 #define CAT_LABEL_COUNT 18
 #define CAT_LEGEND_COUNT 5
 #define CAT_LEGEND_H 26
@@ -18,7 +18,7 @@ static const int cat_legend_w[CAT_LEGEND_COUNT] = {
 };
 #define CAT_LABEL_DRINK 8      /* the reflex layer's goal, see ECN-0003 */
 static const int cat_label_off[CAT_LABEL_COUNT] = {
-    0, 1672, 2640, 3432, 4400, 6600, 7920, 9240, 10032, 11000, 12144, 13288, 14256, 15400, 16544, 18216, 19008, 19800
+    0, 7568, 11660, 14960, 20108, 29964, 35332, 40964, 44440, 48444, 53900, 59136, 63712, 68244, 71896, 78276, 81884, 84964
 };
 static const int cat_label_w[CAT_LABEL_COUNT] = {
     76, 44, 36, 44, 100, 60, 60, 36, 44, 52, 52, 44, 52, 52, 76, 36, 36, 52

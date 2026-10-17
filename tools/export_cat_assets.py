@@ -24,7 +24,9 @@ ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "firmware" / "main"
 SPRITE_SCALE = 4                    # 32 -> 128 px: the room fills 1280x720, so 4x
 ROOM_W, ROOM_H = world.W * 2, world.H * 2      # 640x360, upscaled 2x again on the device
-LABEL_H = 22                        # one text strip
+LABEL_H = 44                        # big enough to read on the tablet at arm's length
+LABEL_FONT_PX = 34
+CJK_FONT_PATH = Path(r"C:\Windows\Fonts\msyh.ttc")
 
 
 LEGEND = ("食盆喂食", "水碗加水", "玩具陪玩", "猫砂盆清洁", "点猫撸猫")
@@ -91,13 +93,24 @@ def sprite_sheet() -> Image.Image:
 
 
 def label_strips(texts: list[str]) -> tuple[bytes, list[int]]:
-    """Pre-rendered text: one strip per label, white on black, sized for 2x."""
+    """Pre-rendered text: one strip per label, white on black.
+
+    Rendered with a real CJK font at 34 px: the first version used PIL's default
+    bitmap font at 22 px strip height and the user could not read the panel
+    ("字体太小了，看不清楚")."""
+    from PIL import ImageFont
+
+    try:
+        font = ImageFont.truetype(str(CJK_FONT_PATH), LABEL_FONT_PX)
+    except OSError:
+        font = ImageFont.load_default()
     blob = bytearray()
     offsets = []
     for t in texts:
-        strip = Image.new("RGB", (8 * len(t) + 4, LABEL_H), (0, 0, 0))
-        d = ImageDraw.Draw(strip)
-        d.text((2, 4), t, fill=(255, 255, 255))
+        probe = Image.new("RGB", (8, 8))
+        w = int(ImageDraw.Draw(probe).textlength(t, font=font)) + 8
+        strip = Image.new("RGB", (w, LABEL_H), (0, 0, 0))
+        ImageDraw.Draw(strip).text((4, 2), t, fill=(255, 255, 255), font=font)
         offsets.append(len(blob) // 2)             # in pixels (16-bit units)
         blob += rgb565(strip)
     return bytes(blob), offsets
