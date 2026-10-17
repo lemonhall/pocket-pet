@@ -205,8 +205,8 @@ void display_cat_mark(int vx, int vy) {
     s_mark_x = vx; s_mark_y = vy; s_mark_life = 25;
 }
 
-static void draw_mark(uint16_t *fb) {
-    if (s_mark_life <= 0 || s_mark_x < 0) return;
+static bool draw_mark(uint16_t *fb) {
+    if (s_mark_life <= 0 || s_mark_x < 0) return false;
     for (int j = -MARK_R; j <= MARK_R; j++)
         for (int i = -MARK_R; i <= MARK_R; i++) {
             if (i * i + j * j > MARK_R * MARK_R) continue;
@@ -214,6 +214,7 @@ static void draw_mark(uint16_t *fb) {
             put(fb, s_mark_x + i, s_mark_y + j, 0xFFFF);
         }
     s_mark_life--;
+    return true;                    /* "I painted" - the only way to know it must be erased */
 }
 
 void display_cat_frame(const cat_state_t *c) {
@@ -293,13 +294,17 @@ void display_cat_frame(const cat_state_t *c) {
             }
         rotate_rect(fb, hx - 2, hy - 2, CAT_HEART + 4, CAT_HEART + 4);
     }
-    draw_mark(fb);                        /* a tap marker, if one is alive */
+    bool marked = draw_mark(fb);          /* a tap marker, if one is alive */
     if (s_last_cx > -999) rotate_rect(fb, s_last_cx, s_last_cy, FRAME, FRAME);
     rotate_rect(fb, cx, cy, FRAME, FRAME);
-    if (s_mark_life > 0 && s_mark_x >= 0)
-        rotate_rect(fb, s_mark_x - MARK_R, s_mark_y - MARK_R, 2 * MARK_R + 1, 2 * MARK_R + 1);
-    s_prev_mark_x = (s_mark_life > 0) ? s_mark_x : -1;
-    s_prev_mark_y = (s_mark_life > 0) ? s_mark_y : -1;
+    /* both the erasing rectangle and the painting one must reach the DSI, or the
+     * cross stays on the glass for ever - that is exactly what "a pile of crosses"
+     * was (the erase touched the view but was never rotated across) */
+    if (s_prev_mark_x >= 0)
+        rotate_rect(fb, s_prev_mark_x - MARK_R, s_prev_mark_y - MARK_R, 2 * MARK_R + 1, 2 * MARK_R + 1);
+    if (marked) rotate_rect(fb, s_mark_x - MARK_R, s_mark_y - MARK_R, 2 * MARK_R + 1, 2 * MARK_R + 1);
+    s_prev_mark_x = marked ? s_mark_x : -1;
+    s_prev_mark_y = marked ? s_mark_y : -1;
     s_last_cx = cx; s_last_cy = cy;
     esp_lcd_panel_draw_bitmap(s_panel, 0, 0, DSI_W, DSI_H, s_ppa_out);
 
