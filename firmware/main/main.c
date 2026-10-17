@@ -153,7 +153,10 @@ static void brain_task(void *arg) {
             /* being stroked: the purr loop is already running */
         } else {
             audio_port_stop(SND_BUBBLES_LOOP);   /* its own purr has ended */
-            if ((s_rng >> 16) % 100 < 3) {       /* ~one meow every 2-3 min */
+            if ((s_rng >> 16) % 100 < 40) {      /* TEST RATE: back to 3 after the
+                                                  * own-meow path is proven on the
+                                                  * device (was unverifiable at 3%
+                                                  * inside a 40 s log) */
                 int cue = SND_EAT;
                 if (s_cat.drives[CAT_HUNGER] >= 6) cue = SND_FEED;
                 else if (s_cat.drives[CAT_BORED] >= 7) cue = SND_TAP;
@@ -375,6 +378,12 @@ static void touch_task(void *arg) {
         if (!down) { was_down = false; vTaskDelay(pdMS_TO_TICKS(30)); continue; }
         if (was_down) { vTaskDelay(pdMS_TO_TICKS(30)); continue; }
         was_down = true;
+        /* ONE tap path for both the chip and the `tap` command. This used to be a
+         * copy of the hit test, and only one copy had the sound calls - which is
+         * why touching the cat or the tree was silent while `tap` spoke. */
+        handle_tap((int)raw_x[0], (int)raw_y[0]);
+        vTaskDelay(pdMS_TO_TICKS(400));
+        continue;
         {
             /* The chip reports in the glass's native portrait frame (the driver logs
              * Max.X 720, Max.Y 1280), i.e. in the same coordinates as the DSI buffer.

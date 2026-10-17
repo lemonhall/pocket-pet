@@ -80,12 +80,12 @@ void cat_state_line(const cat_state_t *c, char *out, int n) {
 }
 
 void cat_goal_target(const cat_state_t *c, float *tx, float *ty) {
-    /* just finished something: stroll to a fresh spot before the goal pulls again,
-     * otherwise a cat whose goal repeats parks on the spot and looks frozen */
+    /* just finished something: STAND STILL for a few seconds. (The first version
+     * sent it straight to a wander spot, which never ends - the cat walked
+     * non-stop and the user called it 诡异.) */
     if (c->satisfied > 0) {
-        unsigned seed = (unsigned)(c->spot * 22695477u + 1u);
-        *tx = 20.0f + (float)((seed >> 8) % 280) / 280.0f * 260.0f;
-        *ty = 48.0f + (float)((seed >> 18) % 120) / 120.0f * 110.0f;
+        *tx = c->x;
+        *ty = c->y;
         return;
     }
     const char *name = NULL;
