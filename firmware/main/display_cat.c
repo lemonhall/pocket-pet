@@ -98,6 +98,29 @@ static int blit_sprite(uint16_t *fb, const uint16_t *src, int dx, int dy, uint16
     return painted;
 }
 
+/* Rotate one landscape rectangle of the view into the portrait DSI buffer.
+ *
+ * The DSI buffer persists between frames (the DPI engine scans it continuously),
+ * so a frame only has to push the pixels that changed: the rectangle the cat just
+ * left and the one it is about to occupy. A 90 degree turn maps a rectangle to a
+ * rectangle, so that is the whole story - the full-frame copy it replaces cost
+ * 12 fps. */
+static void rotate_rect(const uint16_t *fb, int vx0, int vy0, int w, int h) {
+    if (vx0 < 0) { w += vx0; vx0 = 0; }
+    if (vy0 < 0) { h += vy0; vy0 = 0; }
+    if (vx0 + w > VIEW_W) w = VIEW_W - vx0;
+    if (vy0 + h > VIEW_H) h = VIEW_H - vy0;
+    if (w <= 0 || h <= 0) return;
+    for (int vy = vy0; vy < vy0 + h; vy++) {
+        const uint16_t *src = fb + (size_t)vy * VIEW_W;
+        for (int vx = vx0; vx < vx0 + w; vx++) {
+            int dx = vy;                      /* landscape y -> portrait column */
+            int dy = VIEW_W - 1 - vx;         /* flipped: the first mapping came out upside down */
+            s_ppa_out[(size_t)dy * DSI_W + dx] = src[vx];
+        }
+    }
+}
+
 static bool ppa_done_cb(ppa_client_handle_t client, ppa_event_data_t *edata, void *user) {
     BaseType_t hp = pdFALSE;
     if (s_ppa_done) xSemaphoreGiveFromISR(s_ppa_done, &hp);
@@ -135,6 +158,13 @@ bool display_cat_init(void) {
     ppa_client_register_event_callbacks(s_ppa, &cbs);
     s_ppa_out = s_fb[0]; s_ppa_free = s_fb[1]; s_ppa_busy = false;
     build_room();
+    if (s_room) {
+        /* the first frame is the whole room: everything later is a dirty rect, so
+         * the DSI buffer has to start out complete or the rest stays noise */
+        memcpy(s_view, s_room, (size_t)VIEW_W * VIEW_H * 2);
+        rotate_rect(s_view, 0, 0, VIEW_W, VIEW_H);
+        esp_lcd_panel_draw_bitmap(s_panel, 0, 0, DSI_W, DSI_H, s_ppa_out);
+    }
     bsp_display_brightness_set(80);
     s_fps_t0 = esp_timer_get_time();
     ESP_LOGI(TAG, "glass up %dx%d portrait, drawn %dx%d landscape via PPA, cat %d px",
@@ -173,7 +203,9 @@ void display_cat_frame(const cat_state_t *c) {
     const uint16_t *sheet = (const uint16_t *)sprites_bin_start;
     int stride = CAT_SHEET_COLS * FRAME;
     int painted = blit_sprite(fb, sheet + (row * FRAME) * stride + col * FRAME, cx, cy, 0x0000);
-    s_last_cx = cx; s_last_cy = cy;
+    /* s_last_* may only move after the old rectangle has been rotated across, or
+     * the "put the room back" call lands on the cat's NEW position and every
+     * earlier position stays on the glass as a ghost cat */
 
     /* Turn the landscape view into the portrait DSI buffer here, on the CPU.
      *
@@ -183,14 +215,10 @@ void display_cat_frame(const cat_state_t *c) {
      * shape that matters most: a clean picture. The obvious optimisation for
      * later is to rotate only the cat's dirty rectangle, since the DSI buffer
      * persists between frames. */
-    for (int vy = 0; vy < VIEW_H; vy++) {
-        const uint16_t *src = fb + vy * VIEW_W;
-        for (int vx = 0; vx < VIEW_W; vx++) {
-            int dx = DSI_W - 1 - vy;          /* landscape right -> portrait column */
-            int dy = vx;                      /* landscape x    -> portrait row    */
-            s_ppa_out[dy * DSI_W + dx] = src[vx];
-        }
-    }
+    /* only the pixels that changed go across: where the cat was, where it is */
+    if (s_last_cx > -999) rotate_rect(fb, s_last_cx, s_last_cy, FRAME, FRAME);
+    rotate_rect(fb, cx, cy, FRAME, FRAME);
+    s_last_cx = cx; s_last_cy = cy;
     esp_lcd_panel_draw_bitmap(s_panel, 0, 0, DSI_W, DSI_H, s_ppa_out);
 
     s_frames++;
