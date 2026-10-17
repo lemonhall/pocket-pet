@@ -25,7 +25,8 @@ ROW = {"right": 0, "up": 1, "down": 2, "left": 3}
 
 # The firmware pre-renders these as bitmaps (it has no font code), so the order
 # here is an interface: display_cat.c indexes cat_label_off[] with it.
-GOAL_LABELS = ("seek_food", "sleep", "play", "groom", "follow_owner", "scratch", "explore", "hide")
+GOAL_LABELS = ("seek_food", "sleep", "play", "groom", "follow_owner", "scratch", "explore", "hide",
+               "drink")     # the ninth is the reflex layer's goal (ECN-0003)
 DRIVE_LABELS = ("hunger", "energy", "bored", "clingy", "litter", "curiosity", "bold", "lazy", "scruff")
 
 

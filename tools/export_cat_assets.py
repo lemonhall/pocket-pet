@@ -22,8 +22,8 @@ from pocket_pet import render, world
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "firmware" / "main"
-SPRITE_SCALE = 2                    # 32 -> 64 px, exactly 2x the room's 2x
-ROOM_W, ROOM_H = world.W * 2, world.H * 2      # 640x360
+SPRITE_SCALE = 4                    # 32 -> 128 px: the room fills 1280x720, so 4x
+ROOM_W, ROOM_H = world.W * 2, world.H * 2      # 640x360, upscaled 2x again on the device
 LABEL_H = 22                        # one text strip
 
 
@@ -89,6 +89,7 @@ def main(argv=None) -> int:
         f"#define CAT_SHEET_COLS {sheet.size[0] // (32 * SPRITE_SCALE)}",
         f"#define CAT_LABEL_H {LABEL_H}",
         f"#define CAT_LABEL_COUNT {len(labels)}",
+        "#define CAT_LABEL_DRINK 8      /* the reflex layer's goal, see ECN-0003 */",
         "static const int cat_label_off[CAT_LABEL_COUNT] = {",
         "    " + ", ".join(str(o) for o in offs),
         "};",
