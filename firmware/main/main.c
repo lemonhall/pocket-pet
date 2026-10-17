@@ -280,10 +280,12 @@ static void touch_task(void *arg) {
         esp_lcd_touch_read_data(tp);
         uint8_t n = 0;
         if (esp_lcd_touch_get_coordinates(tp, raw_x, raw_y, NULL, &n, 1) && n > 0) {
-            /* the chip reports in the glass's native portrait frame; the screen is
-             * scanned landscape via swap_xy, so map by hand: lx = H-1-ty, ly = tx.
-             * Both pairs are logged, so a wrong guess is visible in the log. */
-            int lx = 720 - 1 - (int)raw_y[0];
+            /* The chip reports in the glass's native portrait frame (the driver logs
+             * Max.X 720, Max.Y 1280), i.e. in the same coordinates as the DSI buffer.
+             * display_cat.c turns the view with  view(vx,vy) -> DSI(vy, 1279-vx),
+             * so the inverse is  vx = 1279 - raw_y,  vy = raw_x. The previous
+             * version used the pre-flip formula and mapped most taps off-screen. */
+            int lx = 1280 - 1 - (int)raw_y[0];   /* VIEW_W - 1 - raw_y */
             int ly = (int)raw_x[0];
             const char *hit = "nothing";
             display_cat_mark(lx, ly);          /* so the hit point is visible under your finger */
