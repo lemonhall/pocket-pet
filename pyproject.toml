@@ -5,6 +5,7 @@ description = "An offline desktop cat whose 14M little brain picks what to do ne
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "numpy>=2.5.4",
     "pillow>=12.3.0",
     "torch>=2.14.1",
 ]
