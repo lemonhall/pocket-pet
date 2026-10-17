@@ -92,12 +92,13 @@ def sprite_sheet() -> Image.Image:
     return sheet.resize((sheet.size[0] * SPRITE_SCALE, sheet.size[1] * SPRITE_SCALE), Image.NEAREST)
 
 
-def label_strips(texts: list[str]) -> tuple[bytes, list[int]]:
+def label_strips(texts: list[str]) -> tuple[bytes, list[int], list[int]]:
     """Pre-rendered text: one strip per label, white on black.
 
-    Rendered with a real CJK font at 34 px: the first version used PIL's default
-    bitmap font at 22 px strip height and the user could not read the panel
-    ("字体太小了，看不清楚")."""
+    Returns (blob, offsets, widths). The WIDTHS must be the real ones: the header
+    used to emit a hand-written `8*len+4` guess while the strips were cut to the
+    measured text length, so every row was read with the wrong stride and the panel
+    showed vertical noise (found with tools/preview_panel.py)."""
     from PIL import ImageFont
 
     try:
@@ -105,15 +106,16 @@ def label_strips(texts: list[str]) -> tuple[bytes, list[int]]:
     except OSError:
         font = ImageFont.load_default()
     blob = bytearray()
-    offsets = []
+    offsets, widths = [], []
     for t in texts:
         probe = Image.new("RGB", (8, 8))
         w = int(ImageDraw.Draw(probe).textlength(t, font=font)) + 8
         strip = Image.new("RGB", (w, LABEL_H), (0, 0, 0))
         ImageDraw.Draw(strip).text((4, 2), t, fill=(255, 255, 255), font=font)
         offsets.append(len(blob) // 2)             # in pixels (16-bit units)
+        widths.append(w)
         blob += rgb565(strip)
-    return bytes(blob), offsets
+    return bytes(blob), offsets, widths
 
 
 def main(argv=None) -> int:
@@ -129,7 +131,7 @@ def main(argv=None) -> int:
     (a.out / "sprites.bin").write_bytes(rgb565(sheet))
 
     labels = list(render.GOAL_LABELS) + list(render.DRIVE_LABELS)
-    blob, offs = label_strips(labels)
+    blob, offs, widths = label_strips(labels)
     (a.out / "labels.bin").write_bytes(blob)
 
     # the legend (what each tap does) and the purr heart, on their own
@@ -162,7 +164,7 @@ def main(argv=None) -> int:
         "    " + ", ".join(str(o) for o in offs),
         "};",
         "static const int cat_label_w[CAT_LABEL_COUNT] = {",
-        "    " + ", ".join(str(8 * len(t) + 4) for t in labels),
+        "    " + ", ".join(str(w) for w in widths),
         "};",
     ]
     (a.out / "assets.h").write_text("\n".join(header) + "\n", encoding="utf-8")
