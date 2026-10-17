@@ -131,7 +131,16 @@ def main(argv=None) -> int:
     (a.out / "sprites.bin").write_bytes(rgb565(sheet))
 
     labels = list(render.GOAL_LABELS) + list(render.DRIVE_LABELS)
-    blob, offs, widths = label_strips(labels)
+    # The panel shows these. The C side indexes by position, so the order must not
+    # change - only the words rendered into each strip are translated.
+    ZH = {
+        "seek_food": "找吃的", "sleep": "睡觉", "play": "玩耍", "groom": "理毛",
+        "follow_owner": "找主人", "scratch": "磨爪", "explore": "溜达", "hide": "躲起来",
+        "drink": "喝水",
+        "hunger": "饿", "energy": "精力", "bored": "无聊", "clingy": "粘人",
+        "litter": "猫砂", "curiosity": "好奇", "bold": "胆量", "lazy": "懒", "scruff": "毛乱",
+    }
+    blob, offs, widths = label_strips([ZH.get(t, t) for t in labels])
     (a.out / "labels.bin").write_bytes(blob)
 
     # the legend (what each tap does) and the purr heart, on their own
