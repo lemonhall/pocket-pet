@@ -221,9 +221,11 @@ void display_cat_frame(const cat_state_t *c) {
     else if (c->asleep)          { row = 0; col = 3; }
     else if (c->moving)          { col = c->walking % 3;
                                    row = (hd < 45 || hd >= 315) ? 1 : (hd < 135 ? 0 : (hd < 225 ? 2 : 3)); }
+    else if (c->satisfied > 0)   { row = 2; col = (c->frame / 6) % 2; }  /* idle: looking about */
     else if (c->goal_idx >= 0 && (!strcmp(c->goal, "groom") || !strcmp(c->goal, "seek_food") ||
                                   !strcmp(c->goal, "drink")))
                                  { row = 4; col = (c->frame / 4) % 4; }
+    else if (!c->moving)         { row = 4; col = (c->frame / 6) % 4; }  /* idle: grooming a paw */
     else                         { col = 0;
                                    row = (hd < 45 || hd >= 315) ? 1 : (hd < 135 ? 0 : (hd < 225 ? 2 : 3)); }
     int cx = (int)(c->x * 4.0f) - FRAME / 2;
