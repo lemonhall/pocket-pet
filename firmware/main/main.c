@@ -138,7 +138,15 @@ static void brain_task(void *arg) {
             if (cat_world_summoned(&s_cat)) {
                 ESP_LOGI(TAG, "summons holds: %s (%d frames left)", s_cat.goal, s_cat.summon_frames);
             } else if (s_cat.drives[CAT_THIRST] < 6.0f || s_cat.snooze_frames > 0) {
-                cat_world_set_goal(&s_cat, g);
+                /* a goal it has just finished is in cooldown: without this the model
+                 * kept re-picking follow_owner and the cat shuttled back to the sofa
+                 * for ever (user: "又成了站沙发那边") */
+                if (s_cat.satisfied > 0 && !strcmp(g, s_cat.last)) {
+                    ESP_LOGI(TAG, "brain: %s is on cooldown, wandering instead", g);
+                    cat_world_set_goal(&s_cat, "explore");
+                } else {
+                    cat_world_set_goal(&s_cat, g);
+                }
             }
         } else {
             ESP_LOGW(TAG, "the brain did not answer (%d ms)", ms);
@@ -153,10 +161,10 @@ static void brain_task(void *arg) {
             /* being stroked: the purr loop is already running */
         } else {
             audio_port_stop(SND_BUBBLES_LOOP);   /* its own purr has ended */
-            if ((s_rng >> 16) % 100 < 40) {      /* TEST RATE: back to 3 after the
-                                                  * own-meow path is proven on the
-                                                  * device (was unverifiable at 3%
-                                                  * inside a 40 s log) */
+            if ((s_rng >> 16) % 100 < 3) {       /* back to ~one meow every 2-3 min;
+                                                  * 40% was only to prove the path and
+                                                  * I forgot to restore it, which made
+                                                  * the cat meow every ~14 s */
                 int cue = SND_EAT;
                 if (s_cat.drives[CAT_HUNGER] >= 6) cue = SND_FEED;
                 else if (s_cat.drives[CAT_BORED] >= 7) cue = SND_TAP;
@@ -341,6 +349,10 @@ static const char *handle_tap(int rx, int ry) {
     } else if (fabsf((float)lx - 344) < 90 && fabsf((float)ly - 176) < 90) {
         cat_world_summon(&s_cat, "sleep");          /* the cushion by the window */
         hit = "bed";
+    } else {
+        /* nothing nearby: walk to the point you touched, in room coordinates */
+        cat_world_summon_point(&s_cat, lx / 4.0f, ly / 4.0f);
+        hit = "point";
     }
     ESP_LOGI(TAG, "tap raw (%d,%d) -> screen (%d,%d) = %s | %s", rx, ry, lx, ly, hit, s_cat.notice);
     return hit;

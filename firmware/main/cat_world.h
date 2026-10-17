@@ -55,6 +55,7 @@ typedef struct {
     /* A tap is a summons: for a while the model may not overrule the goal you
      * pointed at, so clicking the tree really does bring the cat over to it. */
     int summon_frames;
+    float summon_x, summon_y;   /* >=0: walk to this exact point (tap anywhere) */
     /* after finishing a goal the cat wanders off for a few seconds instead of
      * standing at the spot; without this it parked at the sofa and froze (user:
      * "喜欢呆在沙发那边，静止不动") */
@@ -76,6 +77,7 @@ void  cat_clean_box(cat_state_t *c);
 void  cat_state_line(const cat_state_t *c, char *out, int n);
 /* Summons: the goal you tapped wins for ~30 s (repeatable by tapping again). */
 void  cat_world_summon(cat_state_t *c, const char *goal);
+void  cat_world_summon_point(cat_state_t *c, float x, float y);
 bool  cat_world_summoned(const cat_state_t *c);
 /* Where the cat should walk for its current goal (room pixels). */
 void  cat_goal_target(const cat_state_t *c, float *tx, float *ty);

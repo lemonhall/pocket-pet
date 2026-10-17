@@ -7,8 +7,8 @@
 #include <stdint.h>
 
 #define SND_RATE 16000
-#define SND_BANK_SAMPLES 65760u
-#define SND_BANK_BYTES 131520u
+#define SND_BANK_SAMPLES 350427u
+#define SND_BANK_BYTES 700854u
 
 enum {
     SND_TAP,

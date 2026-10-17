@@ -80,6 +80,12 @@ void cat_state_line(const cat_state_t *c, char *out, int n) {
 }
 
 void cat_goal_target(const cat_state_t *c, float *tx, float *ty) {
+    /* a point summons overrides everything: you pointed at that spot */
+    if (c->summon_frames > 0 && c->summon_x >= 0) {
+        *tx = c->summon_x;
+        *ty = c->summon_y;
+        return;
+    }
     /* just finished something: STAND STILL for a few seconds. (The first version
      * sent it straight to a wander spot, which never ends - the cat walked
      * non-stop and the user called it 诡异.) */
@@ -115,7 +121,21 @@ void cat_world_summon(cat_state_t *c, const char *goal) {
     if (!goal) return;
     cat_world_set_goal(c, goal);
     c->summon_frames = 600;             /* ~30 s at 20 fps; tapping again refreshes */
+    c->summon_x = -1; c->summon_y = -1;
     snprintf(c->notice, sizeof c->notice, "coming: %s", goal);
+}
+
+/* Tap a bare patch of floor: it walks to exactly that point. This is why a tap
+ * always does something even if the hit test's coordinates drift. */
+void cat_world_summon_point(cat_state_t *c, float x, float y) {
+    if (x < 8) x = 8;
+    if (x > 312) x = 312;
+    if (y < 52) y = 52;
+    if (y > 172) y = 172;
+    c->summon_frames = 600;
+    c->summon_x = x; c->summon_y = y;
+    cat_world_set_goal(c, "explore");
+    snprintf(c->notice, sizeof c->notice, "coming to (%.0f,%.0f)", (double)x, (double)y);
 }
 
 bool cat_world_summoned(const cat_state_t *c) { return c->summon_frames > 0; }
