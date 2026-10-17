@@ -54,28 +54,74 @@ def cat_frame(sheet: Image.Image, cat: world.Cat, t: int) -> Image.Image:
 
 
 def draw_room(d: ImageDraw.ImageDraw) -> None:
-    d.rectangle([0, 0, world.W, world.H], fill=world.FLOOR)
-    for i in range(0, world.W, 16):                    # a hint of floorboards
-        d.line([(i, world.WALL_H), (i, world.H)], fill=world.FLOOR_ALT)
+    """The room. 320x180 logical, drawn with soft shading and real furniture so it
+    reads as a place rather than a diagram (the first version was little more than
+    flat rectangles, which is exactly what the user called 简笔画)."""
+    floor = world.FLOOR
+    # ---- floor: planks with a little grain and a warm rug ----------------------
+    d.rectangle([0, 0, world.W, world.H], fill=floor)
+    for y in range(world.WALL_H, world.H, 7):
+        d.line([(0, y), (world.W, y)], fill=world.FLOOR_ALT)
+    for i in range(0, world.W, 23):
+        d.line([(i, world.WALL_H), (i, world.H)], fill=(188, 160, 122))
+    # the rug
+    d.rounded_rectangle([96, 84, 232, 158], radius=8, fill=(176, 120, 108))
+    d.rounded_rectangle([102, 90, 226, 152], radius=6, outline=(206, 158, 140), width=2)
+    # ---- wall: baseboard, then the window with a sill and curtains -------------
     d.rectangle([0, 0, world.W, world.WALL_H], fill=world.WALL)
-    d.rectangle([0, 0, world.W, 4], fill=world.WALL_DARK)
-    x, y = world.ANCHORS["window"]
-    d.rectangle([x - 22, y - 10, x + 22, y + 8], fill=world.WINDOW_FRAME)
-    d.rectangle([x - 19, y - 7, x + 19, y + 5], fill=world.WINDOW)
-    # the cat tree
+    d.rectangle([0, world.WALL_H - 5, world.W, world.WALL_H], fill=(148, 130, 156))
+    wx, wy = world.ANCHORS["window"]
+    d.rectangle([wx - 26, wy - 14, wx + 26, wy + 10], fill=(226, 220, 232))     # frame
+    d.rectangle([wx - 22, wy - 10, wx + 22, wy + 6], fill=world.WINDOW)         # sky
+    d.rectangle([wx - 22, wy - 2, wx + 22, wy + 6], fill=(176, 214, 232))       # distant hills band
+    d.line([(wx, wy - 10), (wx, wy + 6)], fill=(226, 220, 232), width=1)         # mullion
+    d.rectangle([wx - 30, wy + 8, wx + 30, wy + 12], fill=(214, 206, 220))       # sill
+    for side in (-1, 1):                                                          # curtains
+        x0 = wx + side * 30
+        d.polygon([(x0, wy - 14), (x0 - side * 12, wy - 10), (x0 - side * 12, wy + 12), (x0, wy + 12)],
+                  fill=(196, 148, 156))
+    # ---- the sofa where the human sits (owner anchor) -------------------------
+    ox, oy = world.ANCHORS["owner"]
+    d.rounded_rectangle([ox - 30, oy - 14, ox + 30, oy + 2], radius=5, fill=(146, 116, 128))   # back
+    d.rounded_rectangle([ox - 34, oy - 2, ox + 34, oy + 16], radius=6, fill=(168, 134, 146))   # seat
+    d.rounded_rectangle([ox - 34, oy + 2, ox - 24, oy + 16], radius=4, fill=(186, 152, 164))   # arm
+    d.rounded_rectangle([ox + 24, oy + 2, ox + 34, oy + 16], radius=4, fill=(186, 152, 164))
+    d.rectangle([ox - 30, oy + 16, ox - 26, oy + 20], fill=(120, 96, 106))
+    d.rectangle([ox + 26, oy + 16, ox + 30, oy + 20], fill=(120, 96, 106))
+    # ---- a cushion by the window (the cat's bed) ------------------------------
+    bx, by = world.ANCHORS["bed"]
+    d.ellipse([bx - 18, by - 8, bx + 18, by + 12], fill=(214, 196, 176))
+    d.ellipse([bx - 12, by - 5, bx + 12, by + 8], fill=(232, 216, 198))
+    # ---- the cat tree: two posts, a platform and a dangling toy --------------
     tx, ty = world.ANCHORS["tree"]
-    d.rectangle([tx - 10, ty - 12, tx + 10, ty + 22], fill=world.TREE)
-    d.rectangle([tx - 16, ty - 16, tx + 16, ty - 6], fill=world.WALL_DARK)
-    # the food bowl and the litter box
-    fx, fy = world.ANCHORS["food"]
-    d.ellipse([fx - 9, fy - 5, fx + 9, fy + 5], fill=world.BOWL)
-    d.ellipse([fx - 6, fy - 2, fx + 6, fy + 2], fill=(240, 226, 198))
+    d.rectangle([tx - 3, ty - 4, tx + 3, ty + 26], fill=world.TREE)
+    d.rectangle([tx - 3, ty - 24, tx + 3, ty - 10], fill=(118, 90, 62))
+    d.rounded_rectangle([tx - 18, ty - 30, tx + 18, ty - 22], radius=3, fill=(154, 118, 84))
+    d.rounded_rectangle([tx - 14, ty - 12, tx + 14, ty - 6], radius=3, fill=(154, 118, 84))
+    d.rectangle([tx + 10, ty - 22, tx + 11, ty - 8], fill=(210, 200, 190))
+    d.ellipse([tx + 7, ty - 9, tx + 14, ty - 2], fill=(232, 96, 88))
+    # ---- the litter box, with a lid and a door opening -----------------------
     lx, ly = world.ANCHORS["litter_box"]
-    d.rectangle([lx - 16, ly - 10, lx + 16, ly + 10], fill=world.LITTER)
-    d.rectangle([lx - 13, ly - 7, lx + 13, ly + 7], fill=(206, 198, 184))
-    # the toy
-    ox, oy = world.ANCHORS["toy"]
-    d.ellipse([ox - 4, oy - 4, ox + 4, oy + 4], fill=world.TOY)
+    d.rounded_rectangle([lx - 18, ly - 12, lx + 18, ly + 12], radius=4, fill=world.LITTER)
+    d.rounded_rectangle([lx - 18, ly - 14, lx + 18, ly - 7], radius=3, fill=(150, 140, 124))
+    d.rounded_rectangle([lx - 7, ly - 2, lx + 7, ly + 10], radius=3, fill=(96, 88, 78))   # opening
+    # ---- the bowls: a rim, a shadow, and food/water colour -------------------
+    fx, fy = world.ANCHORS["food"]
+    d.ellipse([fx - 12, fy - 4, fx + 12, fy + 8], fill=(176, 74, 66))
+    d.ellipse([fx - 9, fy - 2, fx + 9, fy + 5], fill=(226, 210, 184))
+    wx2, wy2 = world.ANCHORS["water"]
+    d.ellipse([wx2 - 11, wy2 - 4, wx2 + 11, wy2 + 7], fill=(96, 116, 150))
+    d.ellipse([wx2 - 8, wy2 - 2, wx2 + 8, wy2 + 4], fill=(150, 196, 226))
+    # ---- the toy, a mouse-ish blob ------------------------------------------
+    ox2, oy2 = world.ANCHORS["toy"]
+    d.ellipse([ox2 - 6, oy2 - 5, ox2 + 6, oy2 + 5], fill=world.TOY)
+    d.line([(ox2 + 5, oy2 + 3), (ox2 + 11, oy2 + 7)], fill=(180, 150, 90), width=1)
+    d.ellipse([ox2 - 4, oy2 - 3, ox2 - 1, oy2 - 1], fill=(120, 96, 60))
+    # ---- a plant in the corner, for a bit of life ---------------------------
+    px, py = 24, 108
+    d.rectangle([px - 5, py - 2, px + 5, py + 10], fill=(160, 112, 84))
+    for ang in (-1, 0, 1):
+        d.polygon([(px, py - 2), (px + ang * 9 - 3, py - 14), (px + ang * 9 + 3, py - 12)], fill=(96, 140, 96))
 
 
 def render(cat: world.Cat, t: int, sheet: Image.Image) -> Image.Image:

@@ -27,6 +27,7 @@ TOY = (232, 196, 96)
 # Where things are, and the clock direction the state line reports for them.
 ANCHORS = {
     "food": (54, 128),
+    "water": (104, 152),        # the second bowl; the firmware's thirst reflex uses it
     "litter_box": (286, 146),
     "toy": (196, 62),
     "window": (160, 26),
