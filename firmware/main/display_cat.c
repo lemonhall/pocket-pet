@@ -189,9 +189,14 @@ void display_cat_frame(const cat_state_t *c) {
     if (!s_panel || !s_view || !s_room) return;
     uint16_t *fb = s_view;
 
-    /* 1. wipe everything drawn last frame, from the pristine room */
-    for (int i = 0; i < s_prev_n; i++)
+    /* 1. wipe everything drawn last frame, from the pristine room - AND push those
+     * erased rectangles to the glass. Restoring only the canvas was the whole
+     * reason the purr heart (and earlier, tap crosses) never disappeared: the pixel
+     * change existed in s_view and never reached the DSI buffer. */
+    for (int i = 0; i < s_prev_n; i++) {
         restore_rect(fb, s_prev[i][0], s_prev[i][1], s_prev[i][2], s_prev[i][3]);
+        rotate_rect(fb, s_prev[i][0], s_prev[i][1], s_prev[i][2], s_prev[i][3]);
+    }
     s_cur_n = 0;
 
     /* 2. the floor: what sits under the cat */

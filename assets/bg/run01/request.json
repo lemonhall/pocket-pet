@@ -1,0 +1,8 @@
+{
+  "model": "openai/gpt-image-2.5-sunburst",
+  "prompt": "16-bit pixel art top-down view of a cozy Japanese-style living room floor, seen from directly above: warm wooden floorboards, a large tatami rug, a low sofa at the left edge, a bookshelf against the top wall, a window with curtains at the top centre, a small potted plant in a corner, soft warm lighting, no characters, no animals, no text, no UI, clean pixel clusters, limited palette, crisp pixels, game asset background",
+  "size": "1024x1024",
+  "n": 1,
+  "output_format": "png",
+  "background": "transparent"
+}

@@ -55,6 +55,10 @@ typedef struct {
     /* A tap is a summons: for a while the model may not overrule the goal you
      * pointed at, so clicking the tree really does bring the cat over to it. */
     int summon_frames;
+    /* after finishing a goal the cat wanders off for a few seconds instead of
+     * standing at the spot; without this it parked at the sofa and froze (user:
+     * "喜欢呆在沙发那边，静止不动") */
+    int satisfied;
     /* what just happened, for the status line */
     char notice[48];
 } cat_state_t;

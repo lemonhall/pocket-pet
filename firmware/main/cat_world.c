@@ -80,6 +80,14 @@ void cat_state_line(const cat_state_t *c, char *out, int n) {
 }
 
 void cat_goal_target(const cat_state_t *c, float *tx, float *ty) {
+    /* just finished something: stroll to a fresh spot before the goal pulls again,
+     * otherwise a cat whose goal repeats parks on the spot and looks frozen */
+    if (c->satisfied > 0) {
+        unsigned seed = (unsigned)(c->spot * 22695477u + 1u);
+        *tx = 20.0f + (float)((seed >> 8) % 280) / 280.0f * 260.0f;
+        *ty = 48.0f + (float)((seed >> 18) % 120) / 120.0f * 110.0f;
+        return;
+    }
     const char *name = NULL;
     if (cat_goal_is_reflex(c->goal))           name = "water";
     else if (!strcmp(c->goal, "seek_food"))    name = "food";
@@ -155,6 +163,7 @@ static void arrive(cat_state_t *c) {
     }
     c->last = c->goal;
     c->spot++;                     /* a new wander spot, once per arrival */
+    c->satisfied = 150;            /* ~7 s of "just finished, going for a stroll" */
 }
 
 void cat_world_tick(cat_state_t *c, float dt) {
@@ -163,6 +172,7 @@ void cat_world_tick(cat_state_t *c, float dt) {
     if (c->purr_frames > 0) c->purr_frames--;
     if (c->toy_wiggle > 0) c->toy_wiggle--;
     if (c->summon_frames > 0) c->summon_frames--;
+    if (c->satisfied > 0) c->satisfied--;
     if (c->purr_frames > 0) {
         /* being stroked: it stops and stays put (the display faces it at the camera) */
         c->moving = false;

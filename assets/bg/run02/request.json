@@ -1,0 +1,8 @@
+{
+  "model": "openai/gpt-image-2.5-sunburst",
+  "prompt": "16-bit pixel art top-down view of a cozy living room floor seen from directly above: warm wooden floorboards, a large patterned rug in the middle, a low sofa along the left edge, a bookshelf against the top wall, a window with curtains at top centre, a small potted plant in a corner, soft warm light, no characters, no animals, no text, no UI, clean pixel clusters, limited palette, crisp pixel art game background",
+  "size": "1024x1024",
+  "n": 1,
+  "output_format": "png",
+  "background": "transparent"
+}
