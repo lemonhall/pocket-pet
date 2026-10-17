@@ -107,6 +107,11 @@ static int blit_sprite(uint16_t *fb, const uint16_t *src, int dx, int dy, uint16
  * left and the one it is about to occupy. A 90 degree turn maps a rectangle to a
  * rectangle, so that is the whole story - the full-frame copy it replaces cost
  * 12 fps. */
+static bool s_flip;                  /* half turn, see display_cat_flip() */
+
+void display_cat_flip(bool on) { s_flip = on; }
+bool display_cat_flipped(void) { return s_flip; }
+
 static void rotate_rect(const uint16_t *fb, int vx0, int vy0, int w, int h) {
     if (vx0 < 0) { w += vx0; vx0 = 0; }
     if (vy0 < 0) { h += vy0; vy0 = 0; }
@@ -116,8 +121,8 @@ static void rotate_rect(const uint16_t *fb, int vx0, int vy0, int w, int h) {
     for (int vy = vy0; vy < vy0 + h; vy++) {
         const uint16_t *src = fb + (size_t)vy * VIEW_W;
         for (int vx = vx0; vx < vx0 + w; vx++) {
-            int dx = vy;                      /* landscape y -> portrait column */
-            int dy = VIEW_W - 1 - vx;         /* flipped: the first mapping came out upside down */
+            int dx = s_flip ? (DSI_W - 1 - vy) : vy;
+            int dy = s_flip ? vx : (VIEW_W - 1 - vx);
             s_ppa_out[(size_t)dy * DSI_W + dx] = src[vx];
         }
     }

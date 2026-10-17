@@ -71,6 +71,7 @@ static int goal_id_of(const char *name) {
 /* defined further down, next to the RTC and nvs code */
 static const char *rtc_tod(void);
 static void save_state(void);
+static int cmd_flip(int argc, char **argv);
 
 static void load_brain(void) {
     const esp_partition_t *mp = esp_partition_find_first(ESP_PARTITION_TYPE_DATA, 0x40, NULL);
@@ -257,6 +258,7 @@ static void start_console(void) {
         { .command = "bench",    .help = "bench [n] -> tokens/s",           .func = cmd_bench },
         { .command = "dotcheck", .help = "PIE vs scalar dot self-check",    .func = cmd_dotcheck },
         { .command = "info",     .help = "model, decisions, fps, memory",   .func = cmd_info },
+        { .command = "flip",     .help = "flip: toggle a half turn (saved)",   .func = cmd_flip },
         { .command = "bright",   .help = "bright <0-100>",                  .func = cmd_bright },
     };
     for (size_t i = 0; i < sizeof cmds / sizeof cmds[0]; i++) esp_console_cmd_register(&cmds[i]);
@@ -285,8 +287,14 @@ static void touch_task(void *arg) {
              * display_cat.c turns the view with  view(vx,vy) -> DSI(vy, 1279-vx),
              * so the inverse is  vx = 1279 - raw_y,  vy = raw_x. The previous
              * version used the pre-flip formula and mapped most taps off-screen. */
-            int lx = 1280 - 1 - (int)raw_y[0];   /* VIEW_W - 1 - raw_y */
-            int ly = (int)raw_x[0];
+            int lx, ly;
+            if (display_cat_flipped()) {          /* the touch must use the same turn */
+                lx = (int)raw_y[0];               /* vx = raw_y        */
+                ly = 720 - 1 - (int)raw_x[0];     /* vy = 719 - raw_x  */
+            } else {
+                lx = 1280 - 1 - (int)raw_y[0];    /* vx = 1279 - raw_y */
+                ly = (int)raw_x[0];               /* vy = raw_x        */
+            }
             const char *hit = "nothing";
             display_cat_mark(lx, ly);          /* so the hit point is visible under your finger */
             float bd = 90.0f * 90.0f;                 /* a finger is fat: 90 px radius */
@@ -385,10 +393,31 @@ static void load_state(void) {
              (int)s_cat.drives[CAT_ENERGY], s_cat.goal);
 }
 
+static int cmd_flip(int argc, char **argv) {
+    bool on = display_cat_flipped();
+    if (argc > 1) on = atoi(argv[1]) != 0;
+    else on = !on;
+    display_cat_flip(on);
+    nvs_handle_t h;
+    if (nvs_open("pet", NVS_READWRITE, &h) == ESP_OK) {
+        nvs_set_u8(h, "flip", on ? 1 : 0);
+        nvs_commit(h);
+        nvs_close(h);
+    }
+    printf("flip %s (saved; reboot keeps it)\n", on ? "on (half turn)" : "off");
+    return 0;
+}
+
 void app_main(void) {
     esp_err_t e = nvs_flash_init();
     if (e == ESP_ERR_NVS_NO_FREE_PAGES || e == ESP_ERR_NVS_NEW_VERSION_FOUND) {
         nvs_flash_erase(); nvs_flash_init();
+    }
+    nvs_handle_t fh;
+    if (nvs_open("pet", NVS_READONLY, &fh) == ESP_OK) {
+        uint8_t f = 0;
+        if (nvs_get_u8(fh, "flip", &f) == ESP_OK) display_cat_flip(f != 0);
+        nvs_close(fh);
     }
     cat_world_init(&s_cat);
     rtc_init();

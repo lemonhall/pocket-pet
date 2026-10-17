@@ -12,4 +12,8 @@ void display_cat_brightness(int pct);
 /* Draw a short-lived marker where a tap landed (landscape view coordinates).
  * It makes the touch mapping checkable by eye: the dot must sit under your finger. */
 void display_cat_mark(int vx, int vy);
+/* The glass's physical up direction is not something the firmware can know.
+ * `flip` on the console toggles a half turn; the choice is kept in nvs. */
+void display_cat_flip(bool on);
+bool display_cat_flipped(void);
 int  display_cat_fps(void);
