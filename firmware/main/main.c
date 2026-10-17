@@ -329,10 +329,7 @@ static const char *handle_tap(int rx, int ry) {
     const char *hit = "nothing";
     display_cat_mark(lx, ly);
     float bd = 90.0f * 90.0f;
-    if ((float)(lx - (int)(s_cat.x * 4)) * (lx - (int)(s_cat.x * 4)) +
-        (float)(ly - (int)(s_cat.y * 4)) * (ly - (int)(s_cat.y * 4)) < bd) {
-        cat_pet(&s_cat); say(SND_FEED); say(SND_BUBBLES_LOOP); hit = "pet";
-    } else if (fabsf((float)lx - 216) < 90 && fabsf((float)ly - 512) < 90) {
+    if (fabsf((float)lx - 216) < 90 && fabsf((float)ly - 512) < 90) {
         cat_feed(&s_cat); say(SND_FEED); cat_world_summon(&s_cat, "seek_food"); hit = "food";
     } else if (fabsf((float)lx - 416) < 90 && fabsf((float)ly - 608) < 90) {
         cat_water(&s_cat); say(SND_TAP); cat_world_summon(&s_cat, "drink"); hit = "water";
@@ -349,6 +346,12 @@ static const char *handle_tap(int rx, int ry) {
     } else if (fabsf((float)lx - 344) < 90 && fabsf((float)ly - 176) < 90) {
         cat_world_summon(&s_cat, "sleep");          /* the cushion by the window */
         hit = "bed";
+    } else if ((float)(lx - (int)(s_cat.x * 4)) * (lx - (int)(s_cat.x * 4)) +
+               (float)(ly - (int)(s_cat.y * 4)) * (ly - (int)(s_cat.y * 4)) < bd) {
+        /* the CAT is tested LAST on purpose: it wanders, and when it happened to sit
+         * by the food bowl every tap on the bowl was read as petting (user's log,
+         * 2026-10-17). Objects win; the cat only takes taps on bare floor. */
+        cat_pet(&s_cat); say(SND_FEED); say(SND_BUBBLES_LOOP); hit = "pet";
     } else {
         /* nothing nearby: walk to the point you touched, in room coordinates */
         cat_world_summon_point(&s_cat, lx / 4.0f, ly / 4.0f);

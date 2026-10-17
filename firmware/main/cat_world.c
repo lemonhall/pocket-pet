@@ -122,6 +122,9 @@ void cat_world_summon(cat_state_t *c, const char *goal) {
     cat_world_set_goal(c, goal);
     c->summon_frames = 600;             /* ~30 s at 20 fps; tapping again refreshes */
     c->summon_x = -1; c->summon_y = -1;
+    c->satisfied = 0;                   /* a summons cancels the rest: without this the
+                                         * cat stood 22 px from the bowl for ever,
+                                         * "resting" while you kept tapping it */
     snprintf(c->notice, sizeof c->notice, "coming: %s", goal);
 }
 
@@ -134,6 +137,7 @@ void cat_world_summon_point(cat_state_t *c, float x, float y) {
     if (y > 172) y = 172;
     c->summon_frames = 600;
     c->summon_x = x; c->summon_y = y;
+    c->satisfied = 0;
     cat_world_set_goal(c, "explore");
     snprintf(c->notice, sizeof c->notice, "coming to (%.0f,%.0f)", (double)x, (double)y);
 }
