@@ -75,6 +75,45 @@ uv run python -m pocket_pet.eval                              # 一致率 + 混�
 - 变更：`docs/ecn/`（ECN-0001 反射层 vs 顾问层的覆盖要求；ECN-0002 用 rubric 导出数据集）
 - 抽检：`docs/pet/rubric_spotcheck.md`（15 条人工复核：14 认可，抓到 1 处自相矛盾并修）
 
+## 板上的猫（M5Stack Tab5 / ESP32-P4）
+
+它已经在真机上跑起来了：房间铺满 1280×720 横屏，暹罗猫在里面自己喝水、走去吃饭、睡觉，
+每 4 秒问一次**板上**的 14.2M 模型该干嘛。全部证据（日志原文）在
+[`docs/plan/v1.1-evidence.md`](docs/plan/v1.1-evidence.md)。
+
+| 项 | 实测 |
+|---|---|
+| 面板 | ST7123 720×1280，横屏 1280×720，**18–20 fps** |
+| 屏幕旋转 | `swap_xy` 会花屏 ✗；PPA 只覆盖 2/3 ✗；最终 **CPU 转 + 只转脏矩形** ✓ |
+| 大脑 | `brain ready: dim 384 … vocab 53`；`hunger 8 … → seek_food` **p=0.90**；PIE 自检一致 ✓ |
+| 速度 | 板上 `bench 4` → **447.93 tok/s**（门禁 ≥8）；单次决策 ~1.4–1.9 s |
+| 引擎 | `vendor/llm/` 从 pocket-tank **原样拷入，零改动** ✓ |
+| 记忆 | 驱动值/位置/目标存 nvs，开机 `cat remembered: hunger 9 energy 0 goal explore` ✓ |
+| 时钟 | RTC（RX8130CE @0x32）→ `time` 真的会变成 dawn/day/dusk/night ✓ |
+| 交互 | 控制台 `food/water/play/pet/clean/status/cat/bench/dotcheck/info` + **触摸点按** |
+
+### 刷到板子上
+
+```powershell
+$env:IDF_TOOLS_PATH='E:\Espressif'; . 'E:\Espressif\frameworks\esp-idf-v5.5.6\export.ps1'
+cd firmware; idf.py build
+python -m esptool --chip esp32p4 -p COM9 -b 460800 write_flash --flash_mode dio --flash_size 16MB --flash_freq 80m `
+  0x10000 build\pocket_pet_brain.bin 0x290000 E:\development\pocket-pet\build\cat_q4.bin
+```
+
+模型固定烧在 **0x290000**（与 pocket-tank 的分区表同址），两个模型可以一条 esptool 命令互换；
+鱼缸模型的字节级备份在 `backup/fish_model_0x290000.bin`。
+
+### 跟它互动
+
+```powershell
+# 控制台（鱼缸 director 那套）
+cd E:\development\pocket-tank
+python tools\tab5_console.py COM9 "food" 8 --wait-for "cat>"
+
+# 或者直接点屏幕：食盆=喂 / 水碗=加水 / 玩具=陪玩 / 猫砂盆=清洁 / 猫爬架=抓挠 / 猫身上=撸
+```
+
 ## 素材与许可
 
 - 猫的精灵图派生自 OpenGameArt 的 **"[LPC] Cats and Dogs"**（作者 bluecarrot16，**CC-BY 3.0**），
