@@ -156,10 +156,24 @@ void cat_world_tick(cat_state_t *c, float dt) {
     d[CAT_THIRST]  = clamp9(d[CAT_THIRST] + 0.12f * dt);
     if (!c->box_clean) d[CAT_LITTER] = clamp9(d[CAT_LITTER] + 0.10f * dt);
 
-    /* the reflex layer: thirst outranks whatever the model wanted */
-    if (d[CAT_THIRST] >= REFLEX_THIRST && strcmp(c->goal, "drink") != 0) {
+    /* the reflex layer: thirst outranks whatever the model wanted - unless the
+     * bowl is empty and the cat has already waited, in which case it stands down
+     * for a while (otherwise a dry bowl freezes the cat at the water bowl) */
+    if (c->snooze_frames > 0) c->snooze_frames--;
+    if (d[CAT_THIRST] >= REFLEX_THIRST && c->snooze_frames == 0 && strcmp(c->goal, "drink") != 0) {
         cat_world_set_goal(c, "drink");
         snprintf(c->notice, sizeof c->notice, "thirsty - going to the water bowl");
+    }
+    if (!strcmp(c->goal, "drink")) {
+        if (c->water_left > 0) { c->blocked_frames = 0; }
+        else if (++c->blocked_frames > 200) {                  /* ~10 s at 20 fps */
+            c->blocked_frames = 0;
+            c->snooze_frames = 3000;                           /* ~2.5 min */
+            snprintf(c->notice, sizeof c->notice, "the bowl is dry - giving up for now");
+            cat_world_set_goal(c, "explore");
+        }
+    } else {
+        c->blocked_frames = 0;
     }
 
     float tx, ty;

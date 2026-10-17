@@ -41,6 +41,10 @@ typedef struct {
     /* larder: how much food and water is in the bowls (you refill them) */
     float food_left, water_left;
     bool box_clean;
+    /* reflex bookkeeping: a cat does not stand at an empty bowl for ever. If the
+     * reflex goal cannot satisfy its drive, it stands down for a while and lets
+     * the model drive again - otherwise thirst outranks hunger indefinitely. */
+    int blocked_frames, snooze_frames;
     /* what just happened, for the status line */
     char notice[48];
 } cat_state_t;
