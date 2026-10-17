@@ -72,6 +72,7 @@ static int goal_id_of(const char *name) {
 static const char *rtc_tod(void);
 static void save_state(void);
 static int cmd_flip(int argc, char **argv);
+static int cmd_tap(int argc, char **argv);
 
 static void load_brain(void) {
     const esp_partition_t *mp = esp_partition_find_first(ESP_PARTITION_TYPE_DATA, 0x40, NULL);
@@ -258,11 +259,49 @@ static void start_console(void) {
         { .command = "bench",    .help = "bench [n] -> tokens/s",           .func = cmd_bench },
         { .command = "dotcheck", .help = "PIE vs scalar dot self-check",    .func = cmd_dotcheck },
         { .command = "info",     .help = "model, decisions, fps, memory",   .func = cmd_info },
+        { .command = "tap",      .help = "tap <raw_x> <raw_y> (inject a tap)", .func = cmd_tap },
         { .command = "flip",     .help = "flip: toggle a half turn (saved)",   .func = cmd_flip },
         { .command = "bright",   .help = "bright <0-100>",                  .func = cmd_bright },
     };
     for (size_t i = 0; i < sizeof cmds / sizeof cmds[0]; i++) esp_console_cmd_register(&cmds[i]);
     esp_console_start_repl(repl);
+}
+
+/* One tap, from any source: the touch chip, or the `tap` console command. The
+ * mapping must exist in exactly one place so both paths agree. */
+static const char *handle_tap(int rx, int ry) {
+    int lx, ly;
+    if (display_cat_flipped()) {
+        lx = ry;                        /* vx = raw_y        */
+        ly = 720 - 1 - rx;              /* vy = 719 - raw_x  */
+    } else {
+        lx = 1280 - 1 - ry;             /* vx = 1279 - raw_y */
+        ly = rx;                        /* vy = raw_x        */
+    }
+    const char *hit = "nothing";
+    display_cat_mark(lx, ly);
+    float bd = 90.0f * 90.0f;
+    if ((float)(lx - (int)(s_cat.x * 4)) * (lx - (int)(s_cat.x * 4)) +
+        (float)(ly - (int)(s_cat.y * 4)) * (ly - (int)(s_cat.y * 4)) < bd) {
+        cat_pet(&s_cat); hit = "pet";
+    } else if (fabsf((float)lx - 216) < 90 && fabsf((float)ly - 512) < 90) { cat_feed(&s_cat); hit = "food"; }
+    else if (fabsf((float)lx - 416) < 90 && fabsf((float)ly - 608) < 90) { cat_water(&s_cat); hit = "water"; }
+    else if (fabsf((float)lx - 784) < 90 && fabsf((float)ly - 248) < 90) { cat_play_with(&s_cat); hit = "play"; }
+    else if (fabsf((float)lx - 1144) < 90 && fabsf((float)ly - 584) < 90) { cat_clean_box(&s_cat); hit = "clean"; }
+    else if (fabsf((float)lx - 1000) < 90 && fabsf((float)ly - 240) < 90) {
+        s_cat.drives[CAT_BORED] = 9;
+        snprintf(s_cat.notice, sizeof s_cat.notice, "scratching the tree");
+        hit = "tree";
+    }
+    ESP_LOGI(TAG, "tap raw (%d,%d) -> screen (%d,%d) = %s | %s", rx, ry, lx, ly, hit, s_cat.notice);
+    return hit;
+}
+
+static int cmd_tap(int argc, char **argv) {
+    if (argc < 3) { printf("usage: tap <raw_x> <raw_y>\n"); return 1; }
+    const char *hit = handle_tap(atoi(argv[1]), atoi(argv[2]));
+    printf("tap -> %s | %s\n", hit, s_cat.notice);
+    return 0;
 }
 
 /* ---- touch: tap the thing you mean ---- */
