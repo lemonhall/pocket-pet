@@ -326,15 +326,14 @@ static const char *handle_tap(int rx, int ry) {
         lx = 1280 - 1 - ry;             /* vx = 1279 - raw_y */
         ly = rx;                        /* vy = raw_x        */
     }
-    /* the status panel: the bottom-right object opens it, any tap closes it */
-    if (display_cat_panel_open()) {
-        display_cat_toggle_panel();
-        ESP_LOGI(TAG, "tap raw (%d,%d) -> (%d,%d) = panel closed", rx, ry, lx, ly);
-        return "panel";
-    }
+    /* the status panel: a tap closes it AND then does whatever it normally does.
+     * Returning here instead was a bug: with the panel left open, every tap on the
+     * cat or the bowls was swallowed, so the cat went silent and still (the user
+     * read it as "the sound is gone again"). */
+    if (display_cat_panel_open()) display_cat_toggle_panel();
     if (fabsf((float)lx - 1144) < 110 && fabsf((float)ly - 584) < 130) {
         display_cat_toggle_panel();
-        ESP_LOGI(TAG, "tap raw (%d,%d) -> (%d,%d) = panel opened", rx, ry, lx, ly);
+        ESP_LOGI(TAG, "tap raw (%d,%d) -> (%d,%d) = panel toggled", rx, ry, lx, ly);
         return "panel";
     }
     const char *hit = "nothing";
