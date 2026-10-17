@@ -387,6 +387,10 @@ static void touch_task(void *arg) {
         esp_lcd_touch_read_data(tp);
         uint8_t n = 0;
         bool down = esp_lcd_touch_get_coordinates(tp, raw_x, raw_y, NULL, &n, 1) && n > 0;
+        /* heartbeat: when the touch path silently stopped firing, the only way to
+         * tell "the chip reports nothing" from "my logic drops it" is to log both */
+        static int beat;
+        if ((beat++ % 60) == 0) ESP_LOGI(TAG, "touch poll: points=%d down=%d", (int)n, down ? 1 : 0);
         if (!down) { was_down = false; vTaskDelay(pdMS_TO_TICKS(30)); continue; }
         if (was_down) { vTaskDelay(pdMS_TO_TICKS(30)); continue; }
         was_down = true;
