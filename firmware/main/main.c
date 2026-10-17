@@ -149,7 +149,7 @@ static void brain_task(void *arg) {
             /* being stroked: the purr loop is already running */
         } else {
             audio_port_stop(SND_BUBBLES_LOOP);   /* its own purr has ended */
-            if ((s_rng >> 16) % 100 < 3) {
+            if ((s_rng >> 16) % 100 < 3) {       /* ~one meow every 2-3 min */
                 int cue = SND_EAT;
                 if (s_cat.drives[CAT_HUNGER] >= 6) cue = SND_FEED;
                 else if (s_cat.drives[CAT_BORED] >= 7) cue = SND_TAP;
@@ -157,6 +157,9 @@ static void brain_task(void *arg) {
                 ESP_LOGI(TAG, "meow (own): cue %d", cue);
             }
         }
+        /* one line that makes the heart bug undeniable or absent: is the purr
+         * timer actually running down, and how many rects is the renderer holding? */
+        ESP_LOGI(TAG, "purr_frames=%d", s_cat.purr_frames);
         if ((s_decisions % 3) == 0) save_state();
         ESP_LOGI(TAG, "cat: hunger %d energy %d bored %d litter %d thirst %d | goal %s | time %s | %d fps",
                  (int)s_cat.drives[CAT_HUNGER], (int)s_cat.drives[CAT_ENERGY],
@@ -313,7 +316,7 @@ static const char *handle_tap(int rx, int ry) {
     float bd = 90.0f * 90.0f;
     if ((float)(lx - (int)(s_cat.x * 4)) * (lx - (int)(s_cat.x * 4)) +
         (float)(ly - (int)(s_cat.y * 4)) * (ly - (int)(s_cat.y * 4)) < bd) {
-        cat_pet(&s_cat); say(SND_BUBBLES_LOOP); hit = "pet";
+        cat_pet(&s_cat); say(SND_FEED); say(SND_BUBBLES_LOOP); hit = "pet";
     } else if (fabsf((float)lx - 216) < 90 && fabsf((float)ly - 512) < 90) {
         cat_feed(&s_cat); say(SND_FEED); hit = "food";
     } else if (fabsf((float)lx - 416) < 90 && fabsf((float)ly - 608) < 90) {
