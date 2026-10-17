@@ -123,8 +123,11 @@ static void brain_task(void *arg) {
         if (g) {
             s_decisions++;
             ESP_LOGI(TAG, "brain[%d]: %s -> %s (%d ms)", s_decisions, s_cat.last, g, ms);
-            /* the reflex layer keeps the last word: do not send a thirsty cat to sleep */
-            if (s_cat.drives[CAT_THIRST] < 6.0f) cat_world_set_goal(&s_cat, g);
+            /* The reflex layer may not veto the model, only pre-empt it briefly:
+             * a permanent veto meant a cat stuck at an empty bowl ignored every
+             * "go eat" the brain ever produced (seen on the device 2026-10-17). */
+            if (s_cat.drives[CAT_THIRST] < 6.0f || s_cat.snooze_frames > 0)
+                cat_world_set_goal(&s_cat, g);
         } else {
             ESP_LOGW(TAG, "the brain did not answer (%d ms)", ms);
         }

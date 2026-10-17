@@ -112,13 +112,14 @@ static void arrive(cat_state_t *c) {
             snprintf(c->notice, sizeof c->notice, "the bowl is empty");
         }
     } else if (!strcmp(c->goal, "drink")) {
-        if (c->water_left > 0) {
-            c->water_left -= 1;
-            d[CAT_THIRST] = clamp9(d[CAT_THIRST] - 5);
-            snprintf(c->notice, sizeof c->notice, "drinking (%d left)", (int)c->water_left);
-        } else {
-            snprintf(c->notice, sizeof c->notice, "the water bowl is empty");
-        }
+        /* standing at the bowl always quenches: keying this on water_left made the
+         * thirst drive unsatisfiable whenever the saved state said the bowl was
+         * dry, and the reflex then held the goal for ever (device, 2026-10-17).
+         * Refilling with `water` still tops the bowl up; it is no longer a
+         * precondition for the cat to be able to drink. */
+        d[CAT_THIRST] = clamp9(d[CAT_THIRST] - 5);
+        if (c->water_left > 0) c->water_left -= 1;
+        snprintf(c->notice, sizeof c->notice, "drinking (%d left in the bowl)", (int)c->water_left);
     } else if (!strcmp(c->goal, "sleep")) {
         d[CAT_ENERGY] = clamp9(d[CAT_ENERGY] + 3);
         snprintf(c->notice, sizeof c->notice, "purring in its sleep");
@@ -165,11 +166,14 @@ void cat_world_tick(cat_state_t *c, float dt) {
         snprintf(c->notice, sizeof c->notice, "thirsty - going to the water bowl");
     }
     if (!strcmp(c->goal, "drink")) {
-        if (c->water_left > 0) { c->blocked_frames = 0; }
-        else if (++c->blocked_frames > 200) {                  /* ~10 s at 20 fps */
+        /* give up on thirst if it has not been satisfied in ~10 s, whatever the
+         * bowl says: the first attempt keyed this on water_left, and a bowl that
+         * looked full while the cat could not actually drink froze it there for
+         * ever (the reflex outranked the model and nothing ever released it). */
+        if (++c->blocked_frames > 200) {
             c->blocked_frames = 0;
             c->snooze_frames = 3000;                           /* ~2.5 min */
-            snprintf(c->notice, sizeof c->notice, "the bowl is dry - giving up for now");
+            snprintf(c->notice, sizeof c->notice, "thirst got nowhere - giving up for now");
             cat_world_set_goal(c, "explore");
         }
     } else {
