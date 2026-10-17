@@ -1,0 +1,43 @@
+I (248) esp_psram: Found 32MB PSRAM device
+I (248) esp_psram: Speed: 200MHz
+I (251) hex_psram: psram CS IO is dedicated
+I (251) cpu_start: Multicore app
+I (262) cpu_start: Pro cpu start user code
+I (262) cpu_start: cpu freq: 360000000 Hz
+I (262) app_init: Application information:
+I (262) app_init: Project name:     pocket_pet_brain
+I (263) app_init: App version:      21ee397
+I (263) app_init: Compile time:     Oct 17 2026 09:00:20
+I (263) app_init: ELF file SHA256:  d9b16ad2f...
+I (263) app_init: ESP-IDF:          v5.5.6
+I (264) efuse_init: Min chip rev:     v1.0
+I (264) efuse_init: Max chip rev:     v1.99 
+I (264) efuse_init: Chip rev:         v1.3
+I (264) heap_init: Initializing. RAM available for dynamic allocation:
+I (265) heap_init: At 4FF15990 len 00025630 (149 KiB): RETENT_RAM
+I (265) heap_init: At 4FF3AFC0 len 00004BF0 (18 KiB): RAM
+I (265) heap_init: At 4FF40000 len 00060000 (384 KiB): RAM
+I (265) heap_init: At 50108080 len 00007F80 (31 KiB): RTCRAM
+I (266) heap_init: At 30100070 len 00001F90 (7 KiB): SPM
+I (266) esp_psram: Adding pool of 32768K of PSRAM memory to heap allocator
+I (267) spi_flash: detected chip: generic
+I (267) spi_flash: flash io: dio
+I (267) sleep_gpio: Configure to isolate all GPIO pins in sleep state
+I (268) sleep_gpio: Enable automatic switching of GPIO sleep configuration
+I (269) main_task: Started on CPU0
+I (270) esp_psram: Reserving pool of 64K of internal memory for DMA/internal allocations
+I (270) main_task: Calling app_main()
+I (279) catbrain: brain ready: dim 384 hidden 1024 layers 8 heads 8 vocab 53 seq 64 | tokenizer 702 bytes
+I (279) catbrain: goal ids: seek_food 45 sleep 46 play 47 groom 48 follow_owner 49 scratch 50 explore 51 hide 52
+[5n
+
+Type 'help' to get the list of commands.
+Use UP/DOWN arrows to navigate through command history.
+Press TAB when typing command name to auto-complete.
+
+Your terminal application does not support escape sequences.
+
+Line editing and history features are disabled.
+
+On Windows, try using Windows Terminal or Putty instead.
+cat>  I (833) main_task: Returned from app_main()

@@ -1,0 +1,11 @@
+# pocket-pet partition table - the SAME layout as pocket-tank's, on purpose:
+# the model lives at 0x290000 and is 8 MB, so backup/restore between the tank and
+# the cat is a straight `esptool read_flash/write_flash 0x290000 0x800000`.
+# Name,     Type, SubType, Offset,   Size,     Flags
+nvs,        data, nvs,     0x9000,   0x6000,
+phy_init,   data, phy,     0xf000,   0x1000,
+ota_0,      app,  ota_0,   0x10000,  0x280000,
+model,      data, 0x40,    0x290000, 0x800000,
+otadata,    data, ota,     0xA90000, 0x2000,
+ota_1,      app,  ota_1,   0xAA0000, 0x280000,
+storage,    data, spiffs,  0xD20000, 0x2E0000,
