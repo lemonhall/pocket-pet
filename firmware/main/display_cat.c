@@ -1,17 +1,15 @@
-/* display_cat.c - the room fills the whole glass.
+/* display_cat.c - the room fills the whole glass, landscape, via the PPA.
  *
- * Landscape 1280x720: the room's logical grid is 320x180, so the screen is exactly
- * 4x it and the cat's sprites are 32x4 = 128 px. There is no PPA and no rotation
- * math: esp_lcd_panel_swap_xy() makes the DPI engine scan the very same 1.84 MB
- * buffer as 1280x720, and we draw into it directly.
+ * The glass is 720x1280 portrait and its DPI engine scans that layout - changing
+ * swap_xy did not rotate it, it just tore the picture (2026-10-17, my mistake).
+ * The correct route on this board is the one pocket-tank uses: draw landscape into
+ * a PSRAM buffer and let the PPA (pixel-processing accelerator) do the 90 degree
+ * turn into the DSI frame buffer. Non-blocking, one frame behind, two buffers -
+ * the PPA writes the buffer the DSI is not scanning.
  *
- * Speed comes from the room being static: at init we upscale the 640x360 room
- * asset 2x into a PSRAM copy at screen size, and after that each frame only
- * repaints the cat's previous rectangle (from that copy) plus the cat itself -
- * no more blitting 921k pixels per frame.
- *
- * No status chrome: the user asked for a room with a cat in it, not a dashboard.
- * The drives and the current goal go to the console (status) and the log.
+ * Room: 1280x720 = 4x the 320x180 logical grid, so the cat's sprites are 128 px.
+ * The room is static, so it is upscaled once into s_room and each frame only puts
+ * the cat's previous rectangle back before drawing the cat where it now is.
  */
 #include "display_cat.h"
 
@@ -23,7 +21,9 @@
 #include "esp_lcd_mipi_dsi.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 #include "freertos/task.h"
+#include "driver/ppa.h"
 
 #include "bsp/display.h"
 #include "bsp/m5stack_tab5.h"
@@ -34,56 +34,60 @@ static const char *TAG = "display";
 extern const uint8_t room_bin_start[]    asm("_binary_room_bin_start");
 extern const uint8_t sprites_bin_start[] asm("_binary_sprites_bin_start");
 
-#define PANEL_W 1280
-#define PANEL_H 720
-#define FRAME   CAT_FRAME              /* 128 */
-#define GROUND   0x2104                /* what is left where the cat has been */
+#define DSI_W 720                     /* what the glass scans */
+#define DSI_H 1280
+#define VIEW_W 1280                   /* what we draw (landscape) */
+#define VIEW_H 720
+#define FB_BYTES ((size_t)DSI_W * DSI_H * 2)
+#define FRAME CAT_FRAME               /* 128 */
 
 static esp_lcd_panel_handle_t s_panel;
 static uint16_t *s_fb[2];
-static uint16_t *s_room;              /* the room at screen size, built once */
-static int s_fb_idx;
+static uint16_t *s_view;              /* landscape drawing buffer */
+static uint16_t *s_room;              /* the room at view size, built once */
+static ppa_client_handle_t s_ppa;
+static SemaphoreHandle_t s_ppa_done;
+static uint16_t *s_ppa_out, *s_ppa_free;
+static bool s_ppa_busy;
 static int s_fps, s_frames;
 static int64_t s_fps_t0;
 static int s_last_cx = -1000, s_last_cy = -1000;
 
 static inline void put(uint16_t *fb, int x, int y, uint16_t v) {
-    if (x < 0 || y < 0 || x >= PANEL_W || y >= PANEL_H) return;
-    fb[y * PANEL_W + x] = v;
+    if (x < 0 || y < 0 || x >= VIEW_W || y >= VIEW_H) return;
+    fb[y * VIEW_W + x] = v;
 }
 
-/* the room asset (640x360) upscaled 2x into a screen-sized copy */
 static void build_room(void) {
-    s_room = heap_caps_malloc(PANEL_W * PANEL_H * 2, MALLOC_CAP_SPIRAM);
+    s_room = heap_caps_malloc((size_t)VIEW_W * VIEW_H * 2, MALLOC_CAP_SPIRAM);
     if (!s_room) { ESP_LOGE(TAG, "no PSRAM for the room"); return; }
     const uint16_t *src = (const uint16_t *)room_bin_start;
-    for (int y = 0; y < PANEL_H; y++) {
+    for (int y = 0; y < VIEW_H; y++) {
         const uint16_t *row = src + (y / 2) * CAT_ROOM_W;
-        uint16_t *dst = s_room + y * PANEL_W;
-        for (int x = 0; x < PANEL_W; x++) dst[x] = row[x / 2];
+        uint16_t *dst = s_room + y * VIEW_W;
+        for (int x = 0; x < VIEW_W; x++) dst[x] = row[x / 2];
     }
-    ESP_LOGI(TAG, "room built at %dx%d from %dx%d (2x)", PANEL_W, PANEL_H, CAT_ROOM_W, CAT_ROOM_H);
+    ESP_LOGI(TAG, "room built %dx%d from %dx%d", VIEW_W, VIEW_H, CAT_ROOM_W, CAT_ROOM_H);
 }
 
-static void blit_room_rect(uint16_t *fb, int x0, int y0, int w, int h) {
+static void restore_rect(uint16_t *fb, int x0, int y0, int w, int h) {
     if (!s_room) return;
     for (int j = 0; j < h; j++) {
         int y = y0 + j;
-        if (y < 0 || y >= PANEL_H) continue;
+        if (y < 0 || y >= VIEW_H) continue;
         for (int i = 0; i < w; i++) {
             int x = x0 + i;
-            if (x < 0 || x >= PANEL_W) continue;
-            fb[y * PANEL_W + x] = s_room[y * PANEL_W + x];
+            if (x < 0 || x >= VIEW_W) continue;
+            fb[y * VIEW_W + x] = s_room[y * VIEW_W + x];
         }
     }
 }
 
 static int blit_sprite(uint16_t *fb, const uint16_t *src, int dx, int dy, uint16_t key) {
-    int painted = 0;
-    int stride = CAT_SHEET_COLS * FRAME;
+    int painted = 0, stride = CAT_SHEET_COLS * FRAME;
     for (int j = 0; j < FRAME; j++) {
         int y = dy + j;
-        if (y < 0 || y >= PANEL_H) continue;
+        if (y < 0 || y >= VIEW_H) continue;
         for (int i = 0; i < FRAME; i++) {
             uint16_t v = src[j * stride + i];
             if (v == key) continue;
@@ -92,6 +96,12 @@ static int blit_sprite(uint16_t *fb, const uint16_t *src, int dx, int dy, uint16
         }
     }
     return painted;
+}
+
+static bool ppa_done_cb(ppa_client_handle_t client, ppa_event_data_t *edata, void *user) {
+    BaseType_t hp = pdFALSE;
+    if (s_ppa_done) xSemaphoreGiveFromISR(s_ppa_done, &hp);
+    return hp == pdTRUE;
 }
 
 bool display_cat_init(void) {
@@ -110,31 +120,42 @@ bool display_cat_init(void) {
         return false;
     }
     s_panel = h.panel;
-    esp_lcd_panel_swap_xy(s_panel, true);          /* the glass is scanned landscape */
     if (esp_lcd_dpi_panel_get_frame_buffer(s_panel, 2, (void **)&s_fb[0], (void **)&s_fb[1]) != ESP_OK) {
         ESP_LOGE(TAG, "no DSI frame buffers (CONFIG_BSP_LCD_DPI_BUFFER_NUMS must be 2)");
         return false;
     }
-    build_room();
-    for (int i = 0; i < 2; i++) {
-        if (!s_room) break;
-        memcpy(s_fb[i], s_room, (size_t)PANEL_W * PANEL_H * 2);
-        esp_lcd_panel_draw_bitmap(s_panel, 0, 0, PANEL_W, PANEL_H, s_fb[i]);
+    s_view = heap_caps_malloc((size_t)VIEW_W * VIEW_H * 2, MALLOC_CAP_SPIRAM);
+    s_ppa_done = xSemaphoreCreateBinary();
+    const ppa_client_config_t pc = { .oper_type = PPA_OPERATION_SRM, .max_pending_trans_num = 2 };
+    if (!s_view || !s_ppa_done || ppa_register_client(&pc, &s_ppa) != ESP_OK) {
+        ESP_LOGE(TAG, "no PPA client or no buffer");
+        return false;
     }
+    const ppa_event_callbacks_t cbs = { .on_trans_done = ppa_done_cb };
+    ppa_client_register_event_callbacks(s_ppa, &cbs);
+    s_ppa_out = s_fb[0]; s_ppa_free = s_fb[1]; s_ppa_busy = false;
+    build_room();
     bsp_display_brightness_set(80);
     s_fps_t0 = esp_timer_get_time();
-    ESP_LOGI(TAG, "glass up: %dx%d landscape, cat frame %d px, fb %p / %p",
-             PANEL_W, PANEL_H, FRAME, s_fb[0], s_fb[1]);
+    ESP_LOGI(TAG, "glass up %dx%d portrait, drawn %dx%d landscape via PPA, cat %d px",
+             DSI_W, DSI_H, VIEW_W, VIEW_H, FRAME);
     return true;
 }
 
 void display_cat_brightness(int pct) { bsp_display_brightness_set(pct); }
 
 void display_cat_frame(const cat_state_t *c) {
-    if (!s_panel || !s_room) return;
-    uint16_t *fb = s_fb[s_fb_idx];
-    s_fb_idx ^= 1;
+    if (!s_panel || !s_view || !s_room) return;
 
+    /* collect the previous frame's turn and hand it to the DSI */
+    if (s_ppa_busy) {
+        if (xSemaphoreTake(s_ppa_done, pdMS_TO_TICKS(200)) == pdTRUE) {
+            s_ppa_busy = false;
+            esp_lcd_panel_draw_bitmap(s_panel, 0, 0, DSI_W, DSI_H, s_ppa_out);
+        }
+    }
+
+    uint16_t *fb = s_view;
     int row, col;
     float hd = c->heading;
     if (c->asleep)      { row = 0; col = 3; }
@@ -146,18 +167,33 @@ void display_cat_frame(const cat_state_t *c) {
     else                { col = 0;
                           row = (hd < 45 || hd >= 315) ? 1 : (hd < 135 ? 0 : (hd < 225 ? 2 : 3)); }
 
-    int cx = (int)(c->x * 4.0f) - FRAME / 2;      /* room grid 320x180 -> screen 4x */
+    int cx = (int)(c->x * 4.0f) - FRAME / 2;      /* 320x180 grid -> 1280x720 */
     int cy = (int)(c->y * 4.0f) - FRAME / 2;
-
-    /* put the room back where the cat was, then draw it where it is */
-    if (s_last_cx > -999) blit_room_rect(fb, s_last_cx, s_last_cy, FRAME, FRAME);
+    if (s_last_cx > -999) restore_rect(fb, s_last_cx, s_last_cy, FRAME, FRAME);
     const uint16_t *sheet = (const uint16_t *)sprites_bin_start;
     int stride = CAT_SHEET_COLS * FRAME;
-    const uint16_t *frame = sheet + (row * FRAME) * stride + col * FRAME;
-    int painted = blit_sprite(fb, frame, cx, cy, 0x0000);
+    int painted = blit_sprite(fb, sheet + (row * FRAME) * stride + col * FRAME, cx, cy, 0x0000);
     s_last_cx = cx; s_last_cy = cy;
 
-    esp_lcd_panel_draw_bitmap(s_panel, 0, 0, PANEL_W, PANEL_H, fb);
+    ppa_srm_oper_config_t op = {
+        .in = { .buffer = fb, .pic_w = VIEW_W, .pic_h = VIEW_H,
+                .block_w = VIEW_W, .block_h = VIEW_H, .block_offset_x = 0, .block_offset_y = 0,
+                .srm_cm = PPA_SRM_COLOR_MODE_RGB565 },
+        .out = { .buffer = s_ppa_free, .buffer_size = FB_BYTES,
+                 .pic_w = DSI_W, .pic_h = DSI_H, .block_offset_x = 0, .block_offset_y = 0,
+                 .srm_cm = PPA_SRM_COLOR_MODE_RGB565 },
+        .rotation_angle = PPA_SRM_ROTATION_ANGLE_90,
+        .scale_x = 1.0f, .scale_y = 1.0f,
+        .mirror_x = false, .mirror_y = false,
+        .rgb_swap = false, .byte_swap = false,
+        .alpha_update_mode = PPA_ALPHA_NO_CHANGE,
+        .mode = PPA_TRANS_MODE_NON_BLOCKING,
+    };
+    if (ppa_do_scale_rotate_mirror(s_ppa, &op) == ESP_OK) {
+        uint16_t *t = s_ppa_out; s_ppa_out = s_ppa_free; s_ppa_free = t;
+        s_ppa_busy = true;
+    }
+
     s_frames++;
     int64_t now = esp_timer_get_time();
     if (now - s_fps_t0 >= 1000000) {

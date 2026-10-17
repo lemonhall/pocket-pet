@@ -19,6 +19,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 
 #include "esp_heap_caps.h"
 #include "esp_log.h"
@@ -31,6 +32,9 @@
 
 #include "q4_model.h"
 #include "word_tok.h"
+#include "bsp/touch.h"
+#include "bsp/m5stack_tab5.h"
+#include "esp_lcd_touch.h"
 
 #include "cat_world.h"
 #include "display_cat.h"
@@ -247,6 +251,49 @@ static void start_console(void) {
     esp_console_start_repl(repl);
 }
 
+/* ---- touch: tap the thing you mean ---- */
+static void touch_task(void *arg) {
+    esp_lcd_touch_handle_t tp = NULL;
+    if (bsp_feature_enable(BSP_FEATURE_TOUCH, true) != ESP_OK)
+        ESP_LOGW(TAG, "the touch chip's power (expander TOUCH_EN) did not switch");
+    vTaskDelay(pdMS_TO_TICKS(500));           /* the BSP's own settle: it answers no sooner */
+    if (bsp_touch_new(NULL, &tp) != ESP_OK || !tp) {
+        ESP_LOGE(TAG, "no touch: the cat stays console-only");
+        vTaskDelete(NULL);
+        return;
+    }
+    ESP_LOGI(TAG, "touch ready: tap the bowl, the toy, the cat, the box");
+    uint16_t raw_x[1], raw_y[1];
+    while (1) {
+        esp_lcd_touch_read_data(tp);
+        uint8_t n = 0;
+        if (esp_lcd_touch_get_coordinates(tp, raw_x, raw_y, NULL, &n, 1) && n > 0) {
+            /* the chip reports in the glass's native portrait frame; the screen is
+             * scanned landscape via swap_xy, so map by hand: lx = H-1-ty, ly = tx.
+             * Both pairs are logged, so a wrong guess is visible in the log. */
+            int lx = 720 - 1 - (int)raw_y[0];
+            int ly = (int)raw_x[0];
+            const char *hit = "nothing";
+            float bd = 90.0f * 90.0f;                 /* a finger is fat: 90 px radius */
+            if ((float)(lx - (int)(s_cat.x * 4)) * (lx - (int)(s_cat.x * 4)) +
+                (float)(ly - (int)(s_cat.y * 4)) * (ly - (int)(s_cat.y * 4)) < bd) {
+                cat_pet(&s_cat); hit = "pet";
+            } else if (fabsf((float)lx - 216) < 90 && fabsf((float)ly - 512) < 90) { cat_feed(&s_cat); hit = "food"; }
+            else if (fabsf((float)lx - 416) < 90 && fabsf((float)ly - 608) < 90) { cat_water(&s_cat); hit = "water"; }
+            else if (fabsf((float)lx - 784) < 90 && fabsf((float)ly - 248) < 90) { cat_play_with(&s_cat); hit = "play"; }
+            else if (fabsf((float)lx - 1144) < 90 && fabsf((float)ly - 584) < 90) { cat_clean_box(&s_cat); hit = "clean"; }
+            else if (fabsf((float)lx - 1000) < 90 && fabsf((float)ly - 240) < 90) {
+                s_cat.drives[CAT_BORED] = 9; snprintf(s_cat.notice, sizeof s_cat.notice, "scratching the tree");
+                hit = "tree";
+            }
+            ESP_LOGI(TAG, "tap raw (%d,%d) -> screen (%d,%d) = %s | %s",
+                     (int)raw_x[0], (int)raw_y[0], lx, ly, hit, s_cat.notice);
+            vTaskDelay(pdMS_TO_TICKS(400));           /* one action per tap */
+        }
+        vTaskDelay(pdMS_TO_TICKS(30));
+    }
+}
+
 void app_main(void) {
     esp_err_t e = nvs_flash_init();
     if (e == ESP_ERR_NVS_NO_FREE_PAGES || e == ESP_ERR_NVS_NEW_VERSION_FOUND) {
@@ -256,6 +303,7 @@ void app_main(void) {
     load_brain();
     if (display_cat_init()) {
         xTaskCreatePinnedToCore(render_task, "render", 8192, NULL, 4, NULL, 1);
+        xTaskCreatePinnedToCore(touch_task, "touch", 6144, NULL, 3, NULL, 0);
         char line[256];
         cat_state_line(&s_cat, line, sizeof line);
         ESP_LOGI(TAG, "cat is on screen | state line: %s", line);
