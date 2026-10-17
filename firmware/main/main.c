@@ -72,6 +72,7 @@ static int goal_id_of(const char *name) {
 static const char *rtc_tod(void);
 static void save_state(void);
 static int cmd_flip(int argc, char **argv);
+static int cmd_help(int argc, char **argv);
 static int cmd_tap(int argc, char **argv);
 
 static void load_brain(void) {
@@ -259,6 +260,7 @@ static void start_console(void) {
         { .command = "bench",    .help = "bench [n] -> tokens/s",           .func = cmd_bench },
         { .command = "dotcheck", .help = "PIE vs scalar dot self-check",    .func = cmd_dotcheck },
         { .command = "info",     .help = "model, decisions, fps, memory",   .func = cmd_info },
+        { .command = "help",     .help = "help: what everything does",        .func = cmd_help },
         { .command = "tap",      .help = "tap <raw_x> <raw_y> (inject a tap)", .func = cmd_tap },
         { .command = "flip",     .help = "flip: toggle a half turn (saved)",   .func = cmd_flip },
         { .command = "bright",   .help = "bright <0-100>",                  .func = cmd_bright },
@@ -444,6 +446,20 @@ static int cmd_flip(int argc, char **argv) {
         nvs_close(h);
     }
     printf("flip %s (saved; reboot keeps it)\n", on ? "on (half turn)" : "off");
+    return 0;
+}
+
+static int cmd_help(int argc, char **argv) {
+    (void)argc; (void)argv;
+    printf("tap the screen:  food bowl = feed | water bowl = refill | toy = play |\n"
+           "                 litter box = clean | tree = scratch | the cat = stroke\n"
+           "console:\n"
+           "  food water play pet clean   do it directly\n"
+           "  status                      every drive + the current goal\n"
+           "  cat <state line>            ask the brain\n"
+           "  tap <raw_x> <raw_y>         inject a tap (self-check)\n"
+           "  flip                        half turn (saved)\n"
+           "  bench | dotcheck | info | bright <0-100>\n");
     return 0;
 }
 

@@ -6,6 +6,16 @@
 #define CAT_SHEET_COLS 4
 #define CAT_LABEL_H 22
 #define CAT_LABEL_COUNT 18
+#define CAT_LEGEND_COUNT 5
+#define CAT_LEGEND_H 26
+#define CAT_HEART 28
+#define CAT_HEART_OFF 13312
+static const int cat_legend_off[CAT_LEGEND_COUNT] = {
+    0, 2548, 5096, 7644, 10764
+};
+static const int cat_legend_w[CAT_LEGEND_COUNT] = {
+    98, 98, 98, 120, 98
+};
 #define CAT_LABEL_DRINK 8      /* the reflex layer's goal, see ECN-0003 */
 static const int cat_label_off[CAT_LABEL_COUNT] = {
     0, 1672, 2640, 3432, 4400, 6600, 7920, 9240, 10032, 11000, 12144, 13288, 14256, 15400, 16544, 18216, 19008, 19800

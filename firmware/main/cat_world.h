@@ -45,6 +45,10 @@ typedef struct {
      * reflex goal cannot satisfy its drive, it stands down for a while and lets
      * the model drive again - otherwise thirst outranks hunger indefinitely. */
     int blocked_frames, snooze_frames;
+    /* visible feedback timers: a tap must produce something you can SEE, not just
+     * a changed number (the user's complaint, 2026-10-17) */
+    int purr_frames;            /* >0: stop, face the camera, show a heart */
+    int toy_wiggle;             /* >0: the toy is being waved */
     /* what just happened, for the status line */
     char notice[48];
 } cat_state_t;

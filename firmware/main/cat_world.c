@@ -146,6 +146,14 @@ static void arrive(cat_state_t *c) {
 void cat_world_tick(cat_state_t *c, float dt) {
     float *d = c->drives;
     c->frame++;
+    if (c->purr_frames > 0) c->purr_frames--;
+    if (c->toy_wiggle > 0) c->toy_wiggle--;
+    if (c->purr_frames > 0) {
+        /* being stroked: it stops and stays put (the display faces it at the camera) */
+        c->moving = false;
+        c->drives[CAT_CLINGY] = clamp9(c->drives[CAT_CLINGY] + 0.05f * dt);
+        return;
+    }
     /* the world moves on (rates are per second; a sim minute is a cat-hour) */
     d[CAT_HUNGER] = clamp9(d[CAT_HUNGER] + 0.10f * dt);
     d[CAT_BORED]  = clamp9(d[CAT_BORED] + (c->asleep ? 0.04f : 0.22f) * dt);
@@ -210,16 +218,19 @@ void cat_water(cat_state_t *c) {
     c->drives[CAT_THIRST] = clamp9(c->drives[CAT_THIRST] + 2);
     snprintf(c->notice, sizeof c->notice, "water bowl filled");
 }
-void cat_play_with(cat_state_t *c) {
-    c->drives[CAT_BORED] = clamp9(c->drives[CAT_BORED] + 3);
-    c->drives[CAT_CURIOSITY] = clamp9(c->drives[CAT_CURIOSITY] + 1);
-    snprintf(c->notice, sizeof c->notice, "you wave the toy - the cat is interested");
-}
 void cat_pet(cat_state_t *c) {
     c->drives[CAT_SCRUFF] = clamp9(c->drives[CAT_SCRUFF] - 3);
     c->drives[CAT_CLINGY] = clamp9(c->drives[CAT_CLINGY] + 1);
     c->drives[CAT_BOLD] = clamp9(c->drives[CAT_BOLD] + 1);
+    c->purr_frames = 40;                   /* ~2 s: stop, face the camera, heart */
+    c->moving = false;
     snprintf(c->notice, sizeof c->notice, "purr");
+}
+void cat_play_with(cat_state_t *c) {
+    c->drives[CAT_BORED] = clamp9(c->drives[CAT_BORED] + 3);
+    c->drives[CAT_CURIOSITY] = clamp9(c->drives[CAT_CURIOSITY] + 1);
+    c->toy_wiggle = 60;                    /* ~3 s of waving */
+    snprintf(c->notice, sizeof c->notice, "you wave the toy - the cat is interested");
 }
 void cat_clean_box(cat_state_t *c) {
     c->drives[CAT_LITTER] = 0;

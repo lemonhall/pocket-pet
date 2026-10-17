@@ -34,6 +34,7 @@ static const char *TAG = "display";
 
 extern const uint8_t room_bin_start[]    asm("_binary_room_bin_start");
 extern const uint8_t sprites_bin_start[] asm("_binary_sprites_bin_start");
+extern const uint8_t legend_bin_start[]  asm("_binary_legend_bin_start");
 
 #define DSI_W 720                     /* what the glass scans */
 #define DSI_H 1280
@@ -169,6 +170,21 @@ bool display_cat_init(void) {
         /* the first frame is the whole room: everything later is a dirty rect, so
          * the DSI buffer has to start out complete or the rest stays noise */
         memcpy(s_view, s_room, (size_t)VIEW_W * VIEW_H * 2);
+        /* the legend, bottom left: what each tap area does, in Chinese, rendered
+         * by tools/export_cat_assets.py because the firmware has no font */
+        const uint16_t *lg = (const uint16_t *)legend_bin_start;
+        int lx = 16;
+        for (int i = 0; i < CAT_LEGEND_COUNT; i++) {
+            const uint16_t *strip = lg + cat_legend_off[i];
+            int w = cat_legend_w[i];
+            int y = VIEW_H - CAT_LEGEND_H - 12;
+            for (int j = 0; j < CAT_LEGEND_H; j++)
+                for (int k = 0; k < w; k++) {
+                    uint16_t v = strip[j * w + k];
+                    if (v) put(s_view, lx + k, y + j, v);   /* glyphs only */
+                }
+            lx += w + 18;
+        }
         rotate_rect(s_view, 0, 0, VIEW_W, VIEW_H);
         esp_lcd_panel_draw_bitmap(s_panel, 0, 0, DSI_W, DSI_H, s_ppa_out);
     }
@@ -214,7 +230,8 @@ void display_cat_frame(const cat_state_t *c) {
     uint16_t *fb = s_view;
     int row, col;
     float hd = c->heading;
-    if (c->asleep)      { row = 0; col = 3; }
+    if (c->purr_frames > 0)              { row = 2; col = 0; }   /* facing you */
+    else if (c->asleep)      { row = 0; col = 3; }
     else if (c->moving) { col = c->walking % 3;
                           row = (hd < 45 || hd >= 315) ? 1 : (hd < 135 ? 0 : (hd < 225 ? 2 : 3)); }
     else if (c->goal_idx >= 0 && (!strcmp(c->goal, "groom") || !strcmp(c->goal, "seek_food") ||
@@ -244,6 +261,38 @@ void display_cat_frame(const cat_state_t *c) {
      * later is to rotate only the cat's dirty rectangle, since the DSI buffer
      * persists between frames. */
     /* only the pixels that changed go across: where the cat was, where it is */
+    /* ---- feedback you can actually see (the user: "根本没有交互感") ---- */
+    for (int i = 0; i < 2; i++) {                    /* food bowl, then water bowl */
+        const int bx = (i == 0 ? 54 : 104) * 4, by = (i == 0 ? 128 : 152) * 4;
+        restore_rect(fb, bx - 26, by - 26, 52, 52);
+        float lvl = (i == 0 ? c->food_left : c->water_left) / 3.0f;
+        if (lvl < 0) lvl = 0;
+        if (lvl > 1) lvl = 1;
+        int hgt = (int)(20 * lvl);
+        for (int j = 0; j < hgt; j++)
+            for (int k = 0; k < 22; k++) put(fb, bx - 11 + k, by + 10 - j, i == 0 ? 0xCB60 : 0x4D5F);
+        rotate_rect(fb, bx - 26, by - 26, 52, 52);
+    }
+    if (c->toy_wiggle > 0) {                         /* the toy is being waved */
+        const int tx = 196 * 4, ty = 62 * 4;
+        const int off = (c->toy_wiggle % 12 < 6) ? 10 : -10;
+        restore_rect(fb, tx - 20, ty - 20, 60, 60);
+        for (int j = -9; j <= 9; j++)
+            for (int k = -9; k <= 9; k++)
+                if (j * j + k * k <= 81) put(fb, tx + off + k, ty + j, 0xFE60);
+        rotate_rect(fb, tx - 20, ty - 20, 60, 60);
+    }
+    if (c->purr_frames > 0) {                        /* a heart over its head */
+        const uint16_t *hb = (const uint16_t *)legend_bin_start + CAT_HEART_OFF;
+        int hx = cx + FRAME / 2 - CAT_HEART / 2, hy = cy - CAT_HEART - 8;
+        restore_rect(fb, hx - 2, hy - 2, CAT_HEART + 4, CAT_HEART + 4);
+        for (int j = 0; j < CAT_HEART; j++)
+            for (int k = 0; k < CAT_HEART; k++) {
+                uint16_t v = hb[j * CAT_HEART + k];
+                if (v) put(fb, hx + k, hy + j, v);
+            }
+        rotate_rect(fb, hx - 2, hy - 2, CAT_HEART + 4, CAT_HEART + 4);
+    }
     draw_mark(fb);                        /* a tap marker, if one is alive */
     if (s_last_cx > -999) rotate_rect(fb, s_last_cx, s_last_cy, FRAME, FRAME);
     rotate_rect(fb, cx, cy, FRAME, FRAME);
