@@ -102,7 +102,9 @@ static void rotate_rect(const uint16_t *fb, int vx0, int vy0, int w, int h) {
             s_ppa_out[(size_t)dy * DSI_W + dx] = src[vx];
         }
     }
-    esp_lcd_panel_draw_bitmap(s_panel, 0, 0, DSI_W, DSI_H, s_ppa_out);
+    /* NO draw_bitmap here: presenting is once per frame. Doing it inside this
+     * function meant 5-10 presents per frame (one per dirty rect), so the glass
+     * showed half-updated states and the cat strobed (user: "猫一闪一闪的"). */
 }
 
 static void build_room(void) {
@@ -257,6 +259,9 @@ void display_cat_frame(const cat_state_t *c) {
     s_prev_n = s_cur_n;
     for (int i = 0; i < s_cur_n; i++)
         for (int k = 0; k < 4; k++) s_prev[i][k] = s_cur[i][k];
+
+    /* 6. present ONCE per frame, after every rectangle has been written */
+    esp_lcd_panel_draw_bitmap(s_panel, 0, 0, DSI_W, DSI_H, s_ppa_out);
 
     s_frames++;
     int64_t now = esp_timer_get_time();
