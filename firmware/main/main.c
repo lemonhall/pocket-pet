@@ -33,6 +33,8 @@
 #include "q4_model.h"
 #include "word_tok.h"
 #include "bsp/touch.h"
+#include "driver/i2c_master.h"
+#include "nvs.h"
 #include "bsp/m5stack_tab5.h"
 #include "esp_lcd_touch.h"
 
@@ -65,6 +67,10 @@ static int goal_id_of(const char *name) {
     int n = word_tok_encode(&s_tok, name, t, 8);
     return n > 1 ? t[1] : -1;
 }
+
+/* defined further down, next to the RTC and nvs code */
+static const char *rtc_tod(void);
+static void save_state(void);
 
 static void load_brain(void) {
     const esp_partition_t *mp = esp_partition_find_first(ESP_PARTITION_TYPE_DATA, 0x40, NULL);
@@ -122,10 +128,13 @@ static void brain_task(void *arg) {
         } else {
             ESP_LOGW(TAG, "the brain did not answer (%d ms)", ms);
         }
-        ESP_LOGI(TAG, "cat: hunger %d energy %d bored %d litter %d thirst %d | goal %s | %d fps",
+        const char *t = rtc_tod();
+        if (t) s_cat.tod = t;
+        if ((s_decisions % 3) == 0) save_state();
+        ESP_LOGI(TAG, "cat: hunger %d energy %d bored %d litter %d thirst %d | goal %s | time %s | %d fps",
                  (int)s_cat.drives[CAT_HUNGER], (int)s_cat.drives[CAT_ENERGY],
                  (int)s_cat.drives[CAT_BORED], (int)s_cat.drives[CAT_LITTER],
-                 (int)s_cat.drives[CAT_THIRST], s_cat.goal, display_cat_fps());
+                 (int)s_cat.drives[CAT_THIRST], s_cat.goal, s_cat.tod, display_cat_fps());
     }
 }
 
@@ -294,12 +303,90 @@ static void touch_task(void *arg) {
     }
 }
 
+/* ---- the clock, and the cat's memory of itself ----
+ *
+ * The state line carries `time dawn|day|dusk|night` and the model was trained with
+ * it varying. Hard-coding "day" would mean the device only ever sees a quarter of
+ * the training distribution, so the RTC is read for real. The RX8130CE at 0x32
+ * holds BCD time in 0x10..0x16 (sec, min, hour, day, month, year).
+ */
+static i2c_master_dev_handle_t s_rtc;
+
+static void rtc_init(void) {
+    i2c_master_bus_handle_t bus = bsp_i2c_get_handle();
+    if (!bus) { ESP_LOGW(TAG, "no i2c bus for the RTC"); return; }
+    const i2c_device_config_t cfg = { .dev_addr_length = I2C_ADDR_BIT_LEN_7,
+                                      .device_address = 0x32, .scl_speed_hz = 100000 };
+    if (i2c_master_bus_add_device(bus, &cfg, &s_rtc) != ESP_OK)
+        ESP_LOGW(TAG, "the RTC at 0x32 did not answer");
+}
+
+static int rtc_hour(void) {
+    if (!s_rtc) return -1;
+    const uint8_t reg = 0x12;
+    uint8_t v = 0;
+    if (i2c_master_transmit_receive(s_rtc, &reg, 1, &v, 1, 100) != ESP_OK) return -1;
+    int h = (v >> 4) * 10 + (v & 0x0F);
+    return (h >= 0 && h < 24) ? h : -1;          /* not BCD -> the clock is not set */
+}
+
+static const char *rtc_tod(void) {
+    int h = rtc_hour();
+    if (h < 0) return NULL;
+    if (h >= 5 && h < 10) return "dawn";
+    if (h >= 10 && h < 17) return "day";
+    if (h >= 17 && h < 21) return "dusk";
+    return "night";
+}
+
+typedef struct {
+    float drives[CAT_DRIVES];
+    float x, y, heading, food, water;
+    int goal_idx;
+    uint8_t box;
+} pet_save_t;
+
+static void save_state(void) {
+    nvs_handle_t h;
+    if (nvs_open("pet", NVS_READWRITE, &h) != ESP_OK) return;
+    pet_save_t s = { 0 };
+    memcpy(s.drives, s_cat.drives, sizeof s.drives);
+    s.x = s_cat.x; s.y = s_cat.y; s.heading = s_cat.heading;
+    s.goal_idx = s_cat.goal_idx; s.food = s_cat.food_left; s.water = s_cat.water_left;
+    s.box = s_cat.box_clean ? 1 : 0;
+    if (nvs_set_blob(h, "state", &s, sizeof s) == ESP_OK) nvs_commit(h);
+    nvs_close(h);
+}
+
+static void load_state(void) {
+    nvs_handle_t h;
+    pet_save_t s = { 0 };
+    size_t len = sizeof s;
+    if (nvs_open("pet", NVS_READONLY, &h) != ESP_OK) return;
+    esp_err_t e = nvs_get_blob(h, "state", &s, &len);
+    nvs_close(h);
+    if (e != ESP_OK || len != sizeof s) return;
+    for (int i = 0; i < CAT_DRIVES; i++)
+        if (s.drives[i] >= 0 && s.drives[i] <= 9) s_cat.drives[i] = s.drives[i];
+    if (s.x > 0 && s.x < 320 && s.y > 0 && s.y < 180) {
+        s_cat.x = s.x; s_cat.y = s.y; s_cat.heading = s.heading;
+    }
+    if (s.goal_idx >= 0 && s.goal_idx < CAT_GOALS) cat_world_set_goal(&s_cat, cat_goal_names[s.goal_idx]);
+    if (s.food >= 0 && s.food <= 3) s_cat.food_left = s.food;
+    if (s.water >= 0 && s.water <= 3) s_cat.water_left = s.water;
+    s_cat.box_clean = s.box != 0;
+    ESP_LOGI(TAG, "cat remembered: hunger %d energy %d goal %s", (int)s_cat.drives[CAT_HUNGER],
+             (int)s_cat.drives[CAT_ENERGY], s_cat.goal);
+}
+
 void app_main(void) {
     esp_err_t e = nvs_flash_init();
     if (e == ESP_ERR_NVS_NO_FREE_PAGES || e == ESP_ERR_NVS_NEW_VERSION_FOUND) {
         nvs_flash_erase(); nvs_flash_init();
     }
     cat_world_init(&s_cat);
+    rtc_init();
+    load_state();
     load_brain();
     if (display_cat_init()) {
         xTaskCreatePinnedToCore(render_task, "render", 8192, NULL, 4, NULL, 1);

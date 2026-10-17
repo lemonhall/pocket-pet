@@ -45,6 +45,7 @@ void cat_world_init(cat_state_t *c) {
     c->drives[CAT_THIRST] = 2;
     c->goal = "explore"; c->goal_idx = cat_goal_index("explore"); c->last = "explore";
     c->stage = "adult";
+    c->tod = "day";
     c->food_left = 3; c->water_left = 3; c->box_clean = true;
     snprintf(c->notice, sizeof c->notice, "ready");
 }
@@ -75,7 +76,7 @@ void cat_state_line(const cat_state_t *c, char *out, int n) {
                           d <= NEAR_PX ? "near" : "mid", clock);
         }
     }
-    snprintf(out + w, n - w, " stage %s last %s time %s", c->stage, c->last, "day");
+    snprintf(out + w, n - w, " stage %s last %s time %s", c->stage, c->last, c->tod ? c->tod : "day");
 }
 
 void cat_goal_target(const cat_state_t *c, float *tx, float *ty) {

@@ -175,24 +175,23 @@ void display_cat_frame(const cat_state_t *c) {
     int painted = blit_sprite(fb, sheet + (row * FRAME) * stride + col * FRAME, cx, cy, 0x0000);
     s_last_cx = cx; s_last_cy = cy;
 
-    ppa_srm_oper_config_t op = {
-        .in = { .buffer = fb, .pic_w = VIEW_W, .pic_h = VIEW_H,
-                .block_w = VIEW_W, .block_h = VIEW_H, .block_offset_x = 0, .block_offset_y = 0,
-                .srm_cm = PPA_SRM_COLOR_MODE_RGB565 },
-        .out = { .buffer = s_ppa_free, .buffer_size = FB_BYTES,
-                 .pic_w = DSI_W, .pic_h = DSI_H, .block_offset_x = 0, .block_offset_y = 0,
-                 .srm_cm = PPA_SRM_COLOR_MODE_RGB565 },
-        .rotation_angle = PPA_SRM_ROTATION_ANGLE_90,
-        .scale_x = 1.0f, .scale_y = 1.0f,
-        .mirror_x = false, .mirror_y = false,
-        .rgb_swap = false, .byte_swap = false,
-        .alpha_update_mode = PPA_ALPHA_NO_CHANGE,
-        .mode = PPA_TRANS_MODE_NON_BLOCKING,
-    };
-    if (ppa_do_scale_rotate_mirror(s_ppa, &op) == ESP_OK) {
-        uint16_t *t = s_ppa_out; s_ppa_out = s_ppa_free; s_ppa_free = t;
-        s_ppa_busy = true;
+    /* Turn the landscape view into the portrait DSI buffer here, on the CPU.
+     *
+     * The PPA was faster but only covered the bottom two thirds of a 1280x720
+     * input (its SRM block is limited - pocket-tank's 720x405 input never hit it).
+     * A plain 90 degree copy is unambiguous and always complete, and it is the
+     * shape that matters most: a clean picture. The obvious optimisation for
+     * later is to rotate only the cat's dirty rectangle, since the DSI buffer
+     * persists between frames. */
+    for (int vy = 0; vy < VIEW_H; vy++) {
+        const uint16_t *src = fb + vy * VIEW_W;
+        for (int vx = 0; vx < VIEW_W; vx++) {
+            int dx = DSI_W - 1 - vy;          /* landscape right -> portrait column */
+            int dy = vx;                      /* landscape x    -> portrait row    */
+            s_ppa_out[dy * DSI_W + dx] = src[vx];
+        }
     }
+    esp_lcd_panel_draw_bitmap(s_panel, 0, 0, DSI_W, DSI_H, s_ppa_out);
 
     s_frames++;
     int64_t now = esp_timer_get_time();

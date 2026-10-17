@@ -36,6 +36,7 @@ typedef struct {
     const char *goal;           /* the goal as text (may be "drink") */
     const char *last;           /* what it did before */
     const char *stage;
+    const char *tod;            /* dawn|day|dusk|night, set from the RTC by main */
     int frame;                  /* frames since boot, for animation */
     /* larder: how much food and water is in the bowls (you refill them) */
     float food_left, water_left;
