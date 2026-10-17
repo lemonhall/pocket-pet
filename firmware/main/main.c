@@ -326,6 +326,17 @@ static const char *handle_tap(int rx, int ry) {
         lx = 1280 - 1 - ry;             /* vx = 1279 - raw_y */
         ly = rx;                        /* vy = raw_x        */
     }
+    /* the status panel: the bottom-right object opens it, any tap closes it */
+    if (display_cat_panel_open()) {
+        display_cat_toggle_panel();
+        ESP_LOGI(TAG, "tap raw (%d,%d) -> (%d,%d) = panel closed", rx, ry, lx, ly);
+        return "panel";
+    }
+    if (fabsf((float)lx - 1144) < 110 && fabsf((float)ly - 584) < 130) {
+        display_cat_toggle_panel();
+        ESP_LOGI(TAG, "tap raw (%d,%d) -> (%d,%d) = panel opened", rx, ry, lx, ly);
+        return "panel";
+    }
     const char *hit = "nothing";
     display_cat_mark(lx, ly);
     float bd = 90.0f * 90.0f;

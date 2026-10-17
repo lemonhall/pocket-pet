@@ -37,6 +37,7 @@
 static const char *TAG = "display";
 
 extern const uint8_t room_bin_start[]   asm("_binary_room_bin_start");
+extern const uint8_t labels_bin_start[] asm("_binary_labels_bin_start");
 extern const uint8_t sprites_bin_start[] asm("_binary_sprites_bin_start");
 extern const uint8_t legend_bin_start[] asm("_binary_legend_bin_start");
 
@@ -187,6 +188,50 @@ static void draw_bowl(uint16_t *fb, float level, int cx, int cy, uint16_t colour
     add_rect(cx - 26, cy - 26, 52, 52);
 }
 
+static void fill(uint16_t *fb, int x, int y, int w, int h, uint16_t v) {
+    for (int j = 0; j < h; j++)
+        for (int i = 0; i < w; i++) put(fb, x + i, y + j, v);
+}
+
+/* a pre-rendered label, keyed on black (the exporter paints glyphs on black) */
+static void blit_label(uint16_t *fb, const uint16_t *src, int w, int x, int y) {
+    for (int j = 0; j < CAT_LABEL_H; j++)
+        for (int i = 0; i < w; i++) {
+            uint16_t v = src[j * w + i];
+            if (v) put(fb, x + i, y + j, v);
+        }
+}
+
+static bool s_show_panel;            /* the status panel is open */
+
+void display_cat_toggle_panel(void) { s_show_panel = !s_show_panel; }
+bool display_cat_panel_open(void) { return s_show_panel; }
+
+/* The panel: one row per drive, with its pre-rendered Chinese label and a bar.
+ * Numbers would need a font; bars carry the same information. */
+static void draw_panel(uint16_t *fb, const cat_state_t *c) {
+    const int x0 = 330, y0 = 140, w = 620, h = 440;
+    fill(fb, x0, y0, w, h, 0x18E3);
+    fill(fb, x0, y0, w, 4, 0x5AEB);
+    fill(fb, x0, y0 + h - 4, w, 4, 0x5AEB);
+    const uint16_t *lb = (const uint16_t *)labels_bin_start;
+    /* the goal, at the top, boxed */
+    int gi = c->goal_idx >= 0 ? c->goal_idx : CAT_LABEL_DRINK;
+    blit_label(fb, lb + cat_label_off[gi], cat_label_w[gi], x0 + 24, y0 + 20);
+    for (int i = 0; i < CAT_DRIVES; i++) {
+        int y = y0 + 70 + i * 38;
+        int idx = 9 + i;                       /* the 9 drive labels follow the goals */
+        if (idx < CAT_LABEL_COUNT) blit_label(fb, lb + cat_label_off[idx], cat_label_w[idx], x0 + 24, y);
+        int bx = x0 + 210;
+        fill(fb, bx, y + 4, 340, 18, 0x2945);
+        float v = c->drives[i] / 9.0f;
+        if (v < 0) v = 0;
+        if (v > 1) v = 1;
+        fill(fb, bx, y + 4, (int)(340 * v), 18, 0x7FF0);
+    }
+    add_rect(x0, y0, w, h);
+}
+
 void display_cat_frame(const cat_state_t *c) {
     if (!s_panel || !s_view || !s_room) return;
     uint16_t *fb = s_view;
@@ -254,6 +299,9 @@ void display_cat_frame(const cat_state_t *c) {
             }
         add_rect(hx - 2, hy - 2, CAT_HEART + 4, CAT_HEART + 4);
     }
+
+    /* 4b. the status panel sits above everything while it is open */
+    if (s_show_panel) draw_panel(fb, c);
 
     /* 5. push every touched rectangle, and remember them for the next wipe */
     for (int i = 0; i < s_cur_n; i++)

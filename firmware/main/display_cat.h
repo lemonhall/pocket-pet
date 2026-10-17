@@ -16,4 +16,7 @@ void display_cat_mark(int vx, int vy);
  * `flip` on the console toggles a half turn; the choice is kept in nvs. */
 void display_cat_flip(bool on);
 bool display_cat_flipped(void);
+/* the status panel: tap the bottom-right object to open, tap anywhere to close */
+void display_cat_toggle_panel(void);
+bool display_cat_panel_open(void);
 int  display_cat_fps(void);
