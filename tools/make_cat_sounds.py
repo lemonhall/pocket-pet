@@ -61,12 +61,20 @@ def meow(dur: float, f0: float, f1: float, f2: float, bright: float) -> np.ndarr
 
 
 def purr(dur: float) -> np.ndarray:
+    """A purr that a tablet speaker can actually reproduce.
+
+    The first version sat at 72/144 Hz - physically correct for a cat, but a tiny
+    speaker rolls off hard below ~300 Hz, so it was inaudible on the device (the
+    user heard nothing when stroking the cat). The throat flutter stays at 26 Hz
+    (that is amplitude modulation, not pitch), while the carrier moved to 340/680
+    Hz with a breath of filtered noise on top."""
     n = int(dur * RATE)
     t = np.arange(n) / RATE
-    pulse = 0.5 + 0.5 * np.sin(2 * np.pi * 26 * t)          # the throat flutter
-    tone = np.sin(2 * np.pi * 72 * t) + 0.6 * np.sin(2 * np.pi * 144 * t)
+    pulse = 0.45 + 0.55 * np.sin(2 * np.pi * 26 * t)          # the throat flutter
+    tone = np.sin(2 * np.pi * 340 * t) + 0.55 * np.sin(2 * np.pi * 680 * t) \
+           + 0.25 * np.sin(2 * np.pi * 1020 * t)
     noise = np.random.default_rng(3).normal(0, 1, n)
-    noise = np.convolve(noise, np.ones(24) / 24, mode="same") * 0.5
+    noise = np.convolve(noise, np.ones(24) / 24, mode="same") * 0.6
     x = (tone * 0.5 + noise) * pulse
     edge = int(0.06 * RATE)
     x[:edge] *= np.linspace(0, 1, edge)
