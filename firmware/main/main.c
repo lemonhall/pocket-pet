@@ -73,6 +73,7 @@ static int goal_id_of(const char *name) {
 /* defined further down, next to the RTC and nvs code */
 static const char *rtc_tod(void);
 static void save_state(void);
+static void say(int cue);
 static int cmd_flip(int argc, char **argv);
 static int cmd_help(int argc, char **argv);
 static int cmd_tap(int argc, char **argv);
